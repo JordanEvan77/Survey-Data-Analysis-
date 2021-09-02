@@ -1,0 +1,306 @@
+---
+output: html_document
+---
+
+#### **To: Seattle Reign Management**  
+  
+#### **From: Jordan Gropper**  
+  
+#### **Date: August 27, 2021**   
+  
+#### **RE: Findings and Recommendations From Reign FC Fan Survey**
+
+***
+
+```{r setup, include=FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message = FALSE, echo = FALSE}
+library(tidyverse)  #EDA and tidying
+library(ggplot2)    #making graphs
+library(ggannotate) #labeling graphs
+library(kableExtra) #For tables
+library(corrplot)   #For correlation pltos
+library(lares)      #specific correlations
+library(vtable)     #for vtables
+library(correlationfunnel) #attempt at auto EDA
+library(inspectdf)  # attempt at auto EDA
+library(DataExplorer) #attempt at auto EDA
+library(stringr)     #cleaning strings
+library(trelliscopejs)#attempt at auto EDA
+library(knitr)      #table formats
+library(gridExtra)     # use to put graphs together in the same frame
+library(janitor)       # contains tidyverse functions for cross-tables
+library(purrr)
+```
+
+```{r, message=FALSE, warning=FALSE, echo= FALSE}
+soccer_og <- read.csv("Seattle_Reign.csv")
+soccer <- soccer_og
+
+soccer <- soccer %>% 
+  mutate(spndsum = SpndlstS + SpndlstO) %>% 
+  #select(-c(Status, StartDate, EndDate, Progress, Duration__in_seconds_, DistributionChannel, LocationLatitude, LocationLongitude, SpndlstS, SpndlstO, Finished, RecordedDate, RecipientLastName, RecipientEmail, RecipientFirstName))
+  select(c(ResponseId, Interest, Attend1, Attend2, gamelast, lasttype, Gamewit4, Media8_1, Media8_2, Media8_3, Media8_4, Media8_5, spndsum, Media10, Gamepln1, IDteam1:Skill2, Gampln2a:Promo1, Cost3, Media11, dycom1, Benev1, Work4, Patriot3, Posaff1, Seat1, Ticket1, Buymer1, Buyonl1, BuyMat1, BuyStor1, BuySpon1, Attend17, Gender, Race, Income, Age, Spnbuy1:Spnbuy10, Matchsat, GameTim1:GameTim7))#can remove the last entry 
+
+
+soccer <- soccer %>% 
+  mutate(lasttype = (gsub('[[:digit:]]+', '', lasttype))) %>% 
+    mutate(lasttype = str_replace(lasttype, "Match", "1")) %>% 
+      mutate(lasttype = str_replace(lasttype, "Season", "2")) %>% 
+        mutate(lasttype = str_replace(lasttype, "know", "3")) %>% 
+    mutate(lasttype = as.numeric(gsub(".*?([0-9]+).*", "\\1", lasttype)))
+
+soccer <- soccer %>% 
+  mutate(Attend1 = str_replace(Attend1, "Yes", "1")) %>% 
+   mutate(Attend1 = str_replace(Attend1, "no", "0"))
+
+soccer <- soccer %>% 
+  mutate(Interest = str_replace(Interest, "die", "5")) %>% 
+    mutate(Interest = str_replace(Interest, "loyal", "4")) %>% 
+      mutate(Interest = str_replace(Interest, "moderate", "3")) %>% 
+      mutate(Interest = str_replace(Interest, "low-level", "2")) %>% 
+      mutate(Interest = str_replace(Interest, "small", "1")) %>% 
+  mutate(Interest = as.numeric(gsub(".*?([0-9]+).*", "\\1", Interest)))#only keeps the numbers
+  
+
+soccer <- soccer %>% 
+  mutate(Newspaper_Ad =str_remove_all(Media1, "\\D+")) %>% 
+  mutate(Billboard_Ad =str_remove_all(Media3, "\\D+")) %>% 
+  mutate(Radio_Ad =str_remove_all(Media4, "\\D+")) %>% 
+  mutate(General_Media_Ad =str_remove_all(Media5, "\\D+")) %>% 
+  mutate(Internet_Ad =str_remove_all(Media6, "\\D+")) %>% 
+  mutate(Email_Ad =str_remove_all(Media12, "\\D+")) %>% 
+  mutate(Facebk_Ad =str_remove_all(Media7a, "\\D+")) %>% 
+  mutate(Twitter_Ad =str_remove_all(Media7b, "\\D+")) %>% 
+  mutate(Theme_Night_Ad =str_remove_all(Promo3, "\\D+")) %>% 
+  mutate(Halftime_Event =str_remove_all(Promo4, "\\D+")) %>% 
+  mutate(Prematch_Event =str_remove_all(Promo5, "\\D+")) %>% 
+  mutate(Postmtch_Event =str_remove_all(Promo6, "\\D+")) %>% 
+  mutate(Ticket_Disc=str_remove_all(Promo1, "\\D+")) %>% 
+   mutate(WOMFriends =str_remove_all(WOM1, "\\D+")) %>% 
+   mutate(WOMFam =str_remove_all(WOM2, "\\D+")) %>% 
+  mutate(import_commitment = str_remove_all(dycom1, "\\D+")) %>% 
+  mutate(import_kindness = str_remove_all(Benev1, "\\D+")) %>%
+  mutate(import_deligence = str_remove_all(Work4, "\\D+")) %>%
+  mutate(import_Patriot = str_remove_all(Patriot3, "\\D+")) %>% 
+  mutate(Spnbuy1 = str_remove_all(Spnbuy1, "\\D+")) %>% 
+  mutate(Spnbuy2 = str_remove_all(Spnbuy2, "\\D+")) %>% 
+    mutate(Spnbuy3 = str_remove_all(Spnbuy3, "\\D+")) %>% 
+    mutate(Spnbuy4 = str_remove_all(Spnbuy4, "\\D+")) %>% 
+    mutate(Spnbuy5 = str_remove_all(Spnbuy5, "\\D+")) %>% 
+    mutate(Spnbuy6 = str_remove_all(Spnbuy6, "\\D+")) %>% 
+    mutate(Spnbuy7 = str_remove_all(Spnbuy7, "\\D+")) %>% 
+    mutate(Spnbuy8 = str_remove_all(Spnbuy8, "\\D+")) %>% 
+    mutate(Spnbuy9 = str_remove_all(Spnbuy9, "\\D+")) %>% 
+    mutate(Spnbuy10 = str_remove_all(Spnbuy10, "\\D+")) 
+
+soccer <- soccer %>% 
+    mutate(Fut_Matches = Gamepln1) %>% 
+    mutate(Wish_Tv = Media11) %>% 
+    mutate(Pleased_Season2016 = Posaff1) %>% 
+    mutate(Pref_reserved = Seat1) %>% 
+    mutate(Likes_Online_Tickets = Ticket1) %>% 
+    mutate(Gender = as.factor(Gender)) %>% 
+    mutate(Race = as.factor(Race)) %>% 
+    mutate(Income = as.factor(Income))
+
+#soccer <- soccer %>% 
+ # mutate(Fut_Att = as.integer(Gampln2a) + as.integer(Gampln2b) + as.integer(Gampln2c) + as.integer(Gampln2d) + #as.integer(Gampln2e) + as.integer(Gampln2f))
+
+soccer <- soccer %>% 
+  mutate(Matchsat = str_replace(Matchsat, "Neutral", "4")) %>% 
+  mutate(Matchsat = str_replace(Matchsat, "Very Satisfied", "6"))
+
+
+soccer[soccer == "Strongly Disagree"] <- -3
+soccer[soccer == "Disagree"] <- -2
+soccer[soccer == "Somewhat disagree"] <- -1
+soccer[soccer == "Neutral"] <- 0
+soccer[soccer == "Somewhat agree"] <- 1
+soccer[soccer == "Agree"] <- 2
+soccer[soccer == "Strongly agree"] <- 3
+
+#soccer <- soccer %>% 
+ # mutate(across(IDteam1:Skill2, str_replace(, "")))
+
+
+
+soccer <- soccer %>% 
+  mutate(Website = Media8_1, Facebook = Media8_2, Twitter = Media8_3, Insta = Media8_4, YouTube = Media8_5, AttendAlone = Gamewit4, TVview = Media10) %>% 
+  select(-c(Media8_1, Media8_2, Media8_3, Media8_4, Media8_5, Gamewit4, Media10, Media11, dycom1, Benev1, Work4, Patriot3, Posaff1, Seat1, Ticket1))
+
+  #runs fully and has 42 variables
+#colnames(soccer)
+
+soccer[, c(2:24, 41:47, 52:61, 63:100)] <- sapply(soccer[, c(2:24, 41:47, 52:61, 63:100)], as.numeric)#I would like Gender to stay the way it is
+#-------------------------------------------------------------------------------------------------------------------
+
+
+```
+
+```{r, eval = FALSE, echo=FALSE, message=FALSE, include=FALSE}
+We should be focusing in on: 
+- Advertisements: The majority of respondents are 30-50 years old, even outside these age groups the main preferences in Ads are Ticket_discounts and targeted email advertisements
+
+- Sponsors: BECU, Subaru and Ruffneck are the top 3 most popular sponsors, favored as well by 30 - 50 year olds, with many season pass holders that look favorably on their merchandise or services.
+
+- Viewership: TV viewers and Twitter are our best media platforms. THese groups are also favorable of the coach and womans sports in general more than anything else. What is their preferred time for games?
+
+- Attendance: Previous attendance dropped significantly in 2016, but our anticipated attendance in high for 30 -50 year olds, and especially among twitter users.
+
+- Merchandise:
+
+- General Interest/Match satisfaction/loyalty? (look at food stuff maybe?)
+
+Graphs to potentially use
+```
+
+##### **Summary of data**
+The data I was provided from the survey I built has 684 responses from different individuals. The response group is mostly white women that have higher income, over $80,000 to be precise. The age group is mainly between 30 - 50 years old. This is important in considering that my recommendations are based on the respondent group. I anticipate that the pool of people I am observing are a reasonable representations of the full fan base, at least generally enough to make these recommendations. However, if we are able to pull a larger set of data from a survey in the future that would be advisable, as it will strengthen the conclusions we can come to. When observing the data I found that we have a majority of attendees to each game that would consider themselves fans, and the vast amount of respondents felt fond of not only the team but also the league in which they play. I also found through surface level analysis that the majority of individuals do not buy Season Tickets, but rather Single Match or Match Pack ticket sets. Additionally I also found that when responding to match day satisfaction, the majority of individuals were pleased if not very pleased with their match day experience. This is in the light of the fact that 2016 was our lowest attendance year in a while. This may have had to do with a multitude of things, but we were able to define a set of recommendations, two of which we will cover now, that should help increase interest, loyalty, viewership and even attendance to Reign FC and their games. The recommendations I will give revolve around the respondents' preferred methods of selling merchandise and how to best utilize our advertisement methods.
+
+
+```{r, echo=FALSE, message=FALSE, include=FALSE}
+#SPending table for values
+med_spnd_type <- soccer %>% 
+  select(lasttype, spndsum) %>% 
+  drop_na() %>% 
+  group_by(lasttype) %>% 
+  summarise(med_spndsum = median(as.numeric(spndsum)))
+
+med_spnd_type
+
+soccer_merch_pticket <- soccer %>% 
+select(Buymer1:BuySpon1, lasttype) %>%
+select(-c(Buymer1, BuySpon1)) %>% 
+ rename(Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, 
+        ) %>% 
+          pivot_longer(cols = -c(lasttype)) %>% 
+          group_by(lasttype, name) %>% 
+          summarise(value = sum(value >= 1, na.rm = TRUE)) %>% 
+          arrange(-value)%>%
+          slice(0:2)
+
+class(soccer_merch_pticket)
+soccer_merch_pticket
+pref_match <- soccer_merch_pticket[3, 3]
+pref_match
+pref_stores <- soccer_merch_pticket[4, 3]
+pref_stores
+nonseason_match <- soccer_merch_pticket[1, 3]
+```
+
+##### **Recommendation** #1: 
+Merchandise and Spending: Target season ticket holders on match day. 
+
+Our highest spenders are Season Ticket holders. They tend to spend about double what the other ticket holders do. For Season Ticket holders we found that their preference for offered merchandise throughout the season is to have it offered at the match in person or in a sports merchandise store. Of our respondents that had Season Tickets `r pref_match` said they wanted merchandise offered in person at the match followed by `r pref_stores` that said they wanted merchandise offered in stores. Normal match consumers also said they preferred match offerings with `r nonseason_match` saying they also wanted it at the match during the game. On top of this, we found that our respondents were mostly very responsive to sponsors, being in favor of their offered services or products. Continuing to promote theses sponsors at matches should continue to reach the target group of individuals we are looking to gain attention from. This promotion of sponsors, along with targeting specific fan types for merchandise should increase sales. Refer to graph below for insight on level of interest compared to spending. Level 3 Interest consider themselves moderate fans, 4 is loyal fan and 5 is a die-hard fan.
+
+<br>
+![](SpendingByTypeAndInterest.png){width=600px}
+
+
+
+
+```{r, echo=FALSE, message=FALSE, include=FALSE}
+soccer_advertisements_ticket <- soccer %>% 
+  select(Newspaper_Ad:WOMFam, lasttype) %>% 
+  pivot_longer(cols = -c(lasttype)) %>% 
+  group_by(lasttype, name) %>% 
+  summarise(value = sum(value>=1, na.rm = TRUE)) %>% 
+  group_by(lasttype) %>% 
+  arrange(-value)%>%
+  slice(1)
+
+soccer_advertisements_ticket
+sumseason <- soccer_advertisements_ticket[2, 3]
+sumseason
+sumothers <- soccer_advertisements_ticket[1, 3] + soccer_advertisements_ticket[3, 3] + soccer_advertisements_ticket[4, 3]
+sumothers
+```
+
+##### **Recommendation** #2: 
+Advertisements: Focus on both Email Ads and Ticket Discounts as advertisement types. But for season ticket holders, specifically target with Email Ads.
+
+  My next finding and recommendation revolves around specific ad types. We offer upwards of 10 different advertisement types, in everything from newspapers, to YouTube to Facebook. We cover a lot of good ground with our advertisements, but there are definitely 2 types that are more impactful than the rest. When we surveyed Season Ticket holders, `r sumseason` of them, which is over 60% of season ticket holders, said that Emailed Advertisements were the most effective ad type for them. For match set ticket holders, and others, we got `r sumothers` responses that Ticket Discounts were their preferred advertisement type. This makes sense since those that don't have season tickets will need to buy a match pack or individual ticket each time. Both Ticket Discounts and Email Advertisements were ranked as the most impactful ad by respondents. These two ad types are great because they can also be used in combination. Not only can you put a ticket discount ad on our most popular viewed online media source, which is Twitter, but you can double the advertisement methods. All Email Advertisements sent to subscribers of our newsletters and other promotions should receive an ad within the email for a Ticket Discount. Ticket Discount is also prefered by every age (See graph below left). 
+  The second portion of this recommendation on advertisements is also to target the groups on each platform. As shown in the graph "Tops Ads On Viewing Platforms" (See graph below right), the top two types of ads are here on each platform as well. A potential way of putting this finding into practice is to make sure, at the interval that we can afford to give discounts, that Ticket Discounts are advertised clearly on The Team Website, on TV Coverage of Reign FC's games, on Instagram and Facebook. If we must choose one platform for these discounts, we found that twitter is our most viewed platform. So if we are able to prompt enrollment in something like a news letter that we can email to them(along with any advertisement) or if we can solicit Ticket Discounts on our Twitter feed that would be ideal. YouTube viewers would be another easy group to try and offer Email Advertisements to, encouraging fans to subscribe to our email list because they will be kept up to date on "Team news, Coach news, events, discounts and promotions" or something of that variety.
+<br>
+![](AdPreferenceByAge.png){width=450px} ![](AdsByViewership.png){width=450px}
+
+##### **Closing thoughts**:
+
+I believe it to be best based on our findings to market our merchandise similar to the examples given above. Having plenty of Merchandise offered on Match Day, as well as in normal sports stores. Additionally, adapt our other marketing campaigns to the findings given in the 2nd recommendation using our given Email Advertisements and Ticket Discounts with our current understanding of our viewership base. If we intentionally adapt how we market to each individual platform it should increase overall interest in the team, merchandise, match attendance and even grow our viewership.
+
+
+
+```{r, eval=FALSE, echo=FALSE}
+#Not on Memo:
+
+Recommendation #3 Interest:
+
+<br>
+![](CountOfInterestAgeGroups.png){width=800px}
+
+![](InterestFactorsPerLevel.png){width=800px}
+
+
+# Recommendation 3.5: Something to do with Matchsat(add onto)
+</div>
+
+Viewership
+=======================================
+<div style="float: left; width: 95%;">
+
+Recommendation 4: Increase viewership on platforms by 
+<br>
+![](InterestInEachViewership.png){width=800px}
+
+
+![](WishingForTV.png){width=800px}
+
+</div>
+
+
+
+DASHBOARD:
+Recommendation 5: Increased Future Attendance by focusing on future attendance
+
+![](FutureAttendanceViewership.png){width=800px}
+
+
+![](FutureAttendanceByAd.png){width=800px}
+
+
+Recommendation 6: Sponsorship favor, and where to focus:
+
+
+![](SponsorPrefByTicket.png){width=800px}
+When I checked across all the viewing options (youtube, facebook, etc.) Microsoft was the top voted sponsor by those viewers using those platforms. Across all ad preferences microsoft also is king.
+However, each Sponsor does have the best ad type to use for it. So here are the ad types that the sponsors current admirers are using.
+![](AdsBysponsors.png){width=800px}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

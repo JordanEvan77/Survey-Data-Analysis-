@@ -1,0 +1,210 @@
+---
+title: "Reign Soccer Survey Data"
+author: "Jordan Gropper"
+date: "8/27/2021"
+output: slidy_presentation
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+# Load libraries
+library(tidyverse)
+library(gganimate)
+
+```
+
+```{r, echo = FALSE, message=FALSE, warning=FALSE, echo= FALSE}
+soccer_og <- read.csv("Seattle_Reign.csv")
+soccer <- soccer_og
+
+soccer <- soccer %>% 
+  mutate(spndsum = SpndlstS + SpndlstO) %>% 
+  #select(-c(Status, StartDate, EndDate, Progress, Duration__in_seconds_, DistributionChannel, LocationLatitude, LocationLongitude, SpndlstS, SpndlstO, Finished, RecordedDate, RecipientLastName, RecipientEmail, RecipientFirstName))
+  select(c(ResponseId, Interest, Attend1, Attend2, gamelast, lasttype, Gamewit4, Media8_1, Media8_2, Media8_3, Media8_4, Media8_5, spndsum, Media10, Gamepln1, IDteam1:Skill2, Gampln2a:Promo1, Cost3, Media11, dycom1, Benev1, Work4, Patriot3, Posaff1, Seat1, Ticket1, Buymer1, Buyonl1, BuyMat1, BuyStor1, BuySpon1, Attend17, Gender, Race, Income, Age, Spnbuy1:Spnbuy10, Matchimp, GameTim1:GameTim7))#can remove the last entry 
+
+
+soccer <- soccer %>% 
+  mutate(lasttype = (gsub('[[:digit:]]+', '', lasttype))) %>% 
+    mutate(lasttype = str_replace(lasttype, "Match", "1")) %>% 
+      mutate(lasttype = str_replace(lasttype, "Season", "2")) %>% 
+        mutate(lasttype = str_replace(lasttype, "know", "3")) %>% 
+    mutate(lasttype = as.numeric(gsub(".*?([0-9]+).*", "\\1", lasttype)))
+
+soccer <- soccer %>% 
+  mutate(Attend1 = str_replace(Attend1, "Yes", "1")) %>% 
+   mutate(Attend1 = str_replace(Attend1, "no", "0"))
+
+soccer <- soccer %>% 
+  mutate(Interest = str_replace(Interest, "die", "5")) %>% 
+    mutate(Interest = str_replace(Interest, "loyal", "4")) %>% 
+      mutate(Interest = str_replace(Interest, "moderate", "3")) %>% 
+      mutate(Interest = str_replace(Interest, "low-level", "2")) %>% 
+      mutate(Interest = str_replace(Interest, "small", "1")) %>% 
+  mutate(Interest = as.numeric(gsub(".*?([0-9]+).*", "\\1", Interest)))#only keeps the numbers
+  
+
+soccer <- soccer %>% 
+  mutate(Newspaper_Ad =str_remove_all(Media1, "\\D+")) %>% 
+  mutate(Billboard_Ad =str_remove_all(Media3, "\\D+")) %>% 
+  mutate(Radio_Ad =str_remove_all(Media4, "\\D+")) %>% 
+  mutate(General_Media_Ad =str_remove_all(Media5, "\\D+")) %>% 
+  mutate(Internet_Ad =str_remove_all(Media6, "\\D+")) %>% 
+  mutate(Email_Ad =str_remove_all(Media12, "\\D+")) %>% 
+  mutate(Facebk_Ad =str_remove_all(Media7a, "\\D+")) %>% 
+  mutate(Twitter_Ad =str_remove_all(Media7b, "\\D+")) %>% 
+  mutate(Theme_Night_Ad =str_remove_all(Promo3, "\\D+")) %>% 
+  mutate(Halftime_Event =str_remove_all(Promo4, "\\D+")) %>% 
+  mutate(Prematch_Event =str_remove_all(Promo5, "\\D+")) %>% 
+  mutate(Postmtch_Event =str_remove_all(Promo6, "\\D+")) %>% 
+  mutate(Ticket_Disc=str_remove_all(Promo1, "\\D+")) %>% 
+   mutate(WOMFriends =str_remove_all(WOM1, "\\D+")) %>% 
+   mutate(WOMFam =str_remove_all(WOM2, "\\D+")) %>% 
+  mutate(import_commitment = str_remove_all(dycom1, "\\D+")) %>% 
+  mutate(import_kindness = str_remove_all(Benev1, "\\D+")) %>%
+  mutate(import_deligence = str_remove_all(Work4, "\\D+")) %>%
+  mutate(import_Patriot = str_remove_all(Patriot3, "\\D+"))
+
+soccer <- soccer %>% 
+ # mutate(Gampln2b = str_replace(Gampln2b, "1", "2")) %>% 
+ #   mutate(Gampln2c = str_replace(Gampln2c, "1", "3")) %>% 
+#    mutate(Gampln2d = str_replace(Gampln2d, "1", "4")) %>% 
+ #   mutate(Gampln2e = str_replace(Gampln2e, "1", "5")) %>% 
+  #  mutate(Gampln2f = str_replace(Gampln2f, "1", "6")) %>% 
+    mutate(Fut_Matches = Gamepln1) %>% 
+    mutate(Wish_Tv = Media11) %>% 
+    mutate(Pleased_Season2016 = Posaff1) %>% 
+    mutate(Pref_reserved = Seat1) %>% 
+    mutate(Likes_Online_Tickets = Ticket1) %>% 
+    mutate(Gender = as.factor(Gender)) %>% 
+    mutate(Race = as.factor(Race)) %>% 
+    mutate(Income = as.factor(Income))
+
+#soccer <- soccer %>% 
+ # mutate(Fut_Att = as.integer(Gampln2a) + as.integer(Gampln2b) + as.integer(Gampln2c) + as.integer(Gampln2d) + #as.integer(Gampln2e) + as.integer(Gampln2f))
+
+#soccer[soccer$Fdtrsat2 == "Very Satisfied"] <- -3 #need to figure out how scale works, and then do this
+#soccer[soccer$Matchimp == "Very Important"] <- -3 #need to figure out how scale works, and then do this
+
+
+soccer[soccer == "Strongly Disagree"] <- -3
+soccer[soccer == "Disagree"] <- -2
+soccer[soccer == "Somewhat disagree"] <- -1
+soccer[soccer == "Neutral"] <- 0
+soccer[soccer == "Somewhat agree"] <- 1
+soccer[soccer == "Agree"] <- 2
+soccer[soccer == "Strongly agree"] <- 3
+
+#soccer <- soccer %>% 
+ # mutate(across(IDteam1:Skill2, str_replace(, "")))
+
+
+
+soccer <- soccer %>% 
+  mutate(Website = Media8_1, Facebook = Media8_2, Twitter = Media8_3, Insta = Media8_4, YouTube = Media8_5, AttendAlone = Gamewit4, TVview = Media10) %>% 
+  select(-c(Media8_1, Media8_2, Media8_3, Media8_4, Media8_5, Gamewit4, Media10, Media11, dycom1, Benev1, Work4, Patriot3, Posaff1, Seat1, Ticket1))
+
+  #runs fully and has 42 variables
+#colnames(soccer)
+
+soccer[, c(2:24, 41:47, 63:100)] <- sapply(soccer[, c(2:24, 41:47, 63:100)], as.numeric)#I would like Gender to stay the way it is
+
+
+
+```
+
+Data overview
+=======================================
+<div style="float: left; width: 95%;">
+
++ Survey description: 684 respondents, answering over 200 questions having to do with their feelings and opinions on Seattle Reign and the matches. 
+
+    - The responses were collected on sliding scales, like from -3 to 3 on satisfaction or from 1 - 7 on their loyalty to the
+    team
+    - I am basing my findings on these 684 respondents, this a reasonable sample size but does not account for all fans.
+    
++ What I am looking to do with this data                           
+
+    - I found Two Key Changes to potentially impact satisfaction, Interest and Viewership of our fans.
+    - They revolve around the coach being so special to the fans and the popularity of TV & Twitter viewership
+    - With these changes I hope not only Interest and Viewership will increase, but Attendance and Purchasing.
+<br>
+![](SeattleReignLogo.png){width=400px}
+
+</div>
+
+Quick Facts
+=======================================
+<div style="float: left; width: 95%;">
++ Respondents
+
+    - The respondents were mainly white women between the age of 30 - 50 and more than half of our respondents made over
+    $80,000 
+    - Our Respondents alone checked our media sites over 4,000 times a week last season
+    - Satisfaction and Interest in the team is very high in respondents, but I have some recommendations to potentially
+    increase that.
+    - I did notice the significant drop in first time attendance in 2016, and only 30% intend to get season tickets for 2017
+    - This could be due to a multitude of reasons I will dive into here, as well as in our memo and dashboard.
+    - The most preferred game time is Wednesday Evening, Over 500 respondents want Wednesday Evening Matches.
+    
+![](CountOfInterestAgeGroups.png){width=700px}     ![](FutureTickets.png){width=700px}
+</div>
+
+What Impacts Fan Loyalty?
+=======================================
+Recommendation #1: Increasing Interest and Satisfaction: Involve the coach more, adjust accommodations slightly
+
++ Fans answered questions rating what parts of the team and sport that they felt most connected to
+
+    - The respondents all really enjoy womans soccer in general as well as the league Reign is in
+    - The top three important factors though were the coach, the skill of the game, and chance to escape from normal life.
+    - The team should do what it can to involve the coach more in interviews, ad campaigns, and general promotions
+    - Satisfaction wise fans are pleased with Accommodations, only negative feed back was on variety and drink times
+
+![](InterestFactorsPerLevel.png){width=800px}               ![](SatisfactionVariables.png){width=800px} 
+
+
+    
+</div>
+
+Viewership
+=======================================
+<div style="float: left; width: 95%;">
+Recommendation #2: Increase Viewership, and Attendance With National TV presence and Focus on Twitter
+
++ I also saw a very large demand from the majority of respondents asking for National TV coverage.
+
+    - I have over 450 respondents out of 684 that currently watch the Team on TV, but 590 fans want National Coverage
+
+![](InterestInEachViewership.png){width=780px}        ![](FutureAttendanceViewership.png){width=780px}
+
++ This is really important as this will help us with our future attendance: Post lots of information on twitter on and about the team, league and coach, use Ticket Discounts with these users
+    
+
+
+</div>
+
+Bringing It All Together
+=======================================
+<div style="float: left; width: 95%;">
+What Does Acting On These Recomendations Look Like?
+
++ Involve the coach more, maybe diversify our options on food offered
+
+    - The Fans love the skill of the players and the sport itself
+    - However I can increase the media presence of the coach
+    - As stated the respondents are as a whole very satisfied with the accomadations.
+    - It may be difficult to decrease delivery time on drinks without hiring more staff
+    - However, increasing our general variety of foods offered should be straight forward.
++ National TV presence and Focus on Twitter
+
+    - We should do what we can to get on National Television, as over 80% of respondents want that.
+    - TV Viewers also end up going to more games than most viewerships, which will increase ticket sales.
+    - I know that our Twitter Users are the most inclined to go to games, using ticket discounts will increase the                effectiveness of this platform.
+    - Increase season ticket sales up from 30%
+
+
+</div>
