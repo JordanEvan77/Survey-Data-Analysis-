@@ -1,0 +1,2680 @@
+---
+title: "DTC_TA"
+author: "Jordan Gropper"
+date: "8/8/2021"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+# Goals of the Analysis:
+
+i. Determine the primary factors that impact attendance intentions, media consumption 
+intentions, and merchandise consumption intention.
+ii. Determine the factors that impact satisfaction (Performance, Outcome, Matchday 
+Satisfaction).
+iii. Determine ways to increase brand attitude.
+iv. Investigate purchasing habits of corporate partner products.
+v. Investigate ways to improve gameday experience.
+vi. Identify viable market segments.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE) 
+```
+
+```{r message = FALSE}
+library(tidyverse)  #EDA and tidying
+library(ggplot2)    #making graphs
+library(ggannotate) #labeling graphs
+library(kableExtra) #For tables
+library(corrplot)   #For correlation pltos
+library(lares)      #specific correlations
+library(vtable)     #for vtables
+library(correlationfunnel) #attempt at auto EDA
+library(inspectdf)  # attempt at auto EDA
+library(DataExplorer) #attempt at auto EDA
+library(stringr)     #cleaning strings
+library(trelliscopejs)#attempt at auto EDA
+library(knitr)      #table formats
+library(gridExtra)     # use to put graphs together in the same frame
+library(janitor)       # contains tidyverse functions for cross-tables
+library(purrr)
+```
+
+# Load and Transform Data
+
+going to assign to soccer_org, then modify into soccer
+```{r, message=FALSE, warning=FALSE}
+soccer_og <- read.csv("Seattle_Reign.csv")
+soccer <- soccer_og
+
+soccer <- soccer %>% 
+  mutate(spndsum = SpndlstS + SpndlstO) %>% 
+  #select(-c(Status, StartDate, EndDate, Progress, Duration__in_seconds_, DistributionChannel, LocationLatitude, LocationLongitude, SpndlstS, SpndlstO, Finished, RecordedDate, RecipientLastName, RecipientEmail, RecipientFirstName))
+  select(c(ResponseId, Interest, Attend1, Attend2, gamelast, lasttype, Gamewit4, Media8_1, Media8_2, Media8_3, Media8_4, Media8_5, spndsum, Media10, Gamepln1, IDteam1:Skill2, Gampln2a:Promo1, Cost3, Media11, dycom1, Benev1, Work4, Patriot3, Posaff1, Seat1, Ticket1, Buymer1, Buyonl1, BuyMat1, BuyStor1, BuySpon1, Attend17, Gender, Race, Income, Age, Spnbuy1:Spnbuy10, Matchsat, GameTim1:GameTim7))#can remove the last entry 
+
+
+soccer <- soccer %>% 
+  mutate(lasttype = (gsub('[[:digit:]]+', '', lasttype))) %>% 
+    mutate(lasttype = str_replace(lasttype, "Match", "1")) %>% 
+      mutate(lasttype = str_replace(lasttype, "Season", "2")) %>% 
+        mutate(lasttype = str_replace(lasttype, "know", "3")) %>% 
+    mutate(lasttype = as.numeric(gsub(".*?([0-9]+).*", "\\1", lasttype)))
+
+soccer <- soccer %>% 
+  mutate(Attend1 = str_replace(Attend1, "Yes", "1")) %>% 
+   mutate(Attend1 = str_replace(Attend1, "no", "0"))
+
+soccer <- soccer %>% 
+  mutate(Interest = str_replace(Interest, "die", "5")) %>% 
+    mutate(Interest = str_replace(Interest, "loyal", "4")) %>% 
+      mutate(Interest = str_replace(Interest, "moderate", "3")) %>% 
+      mutate(Interest = str_replace(Interest, "low-level", "2")) %>% 
+      mutate(Interest = str_replace(Interest, "small", "1")) %>% 
+  mutate(Interest = as.numeric(gsub(".*?([0-9]+).*", "\\1", Interest)))#only keeps the numbers
+  
+
+soccer <- soccer %>% 
+  mutate(Newspaper_Ad =str_remove_all(Media1, "\\D+")) %>% 
+  mutate(Billboard_Ad =str_remove_all(Media3, "\\D+")) %>% 
+  mutate(Radio_Ad =str_remove_all(Media4, "\\D+")) %>% 
+  mutate(General_Media_Ad =str_remove_all(Media5, "\\D+")) %>% 
+  mutate(Internet_Ad =str_remove_all(Media6, "\\D+")) %>% 
+  mutate(Email_Ad =str_remove_all(Media12, "\\D+")) %>% 
+  mutate(Facebk_Ad =str_remove_all(Media7a, "\\D+")) %>% 
+  mutate(Twitter_Ad =str_remove_all(Media7b, "\\D+")) %>% 
+  mutate(Theme_Night_Ad =str_remove_all(Promo3, "\\D+")) %>% 
+  mutate(Halftime_Event =str_remove_all(Promo4, "\\D+")) %>% 
+  mutate(Prematch_Event =str_remove_all(Promo5, "\\D+")) %>% 
+  mutate(Postmtch_Event =str_remove_all(Promo6, "\\D+")) %>% 
+  mutate(Ticket_Disc=str_remove_all(Promo1, "\\D+")) %>% 
+   mutate(WOMFriends =str_remove_all(WOM1, "\\D+")) %>% 
+   mutate(WOMFam =str_remove_all(WOM2, "\\D+")) %>% 
+  mutate(import_commitment = str_remove_all(dycom1, "\\D+")) %>% 
+  mutate(import_kindness = str_remove_all(Benev1, "\\D+")) %>%
+  mutate(import_deligence = str_remove_all(Work4, "\\D+")) %>%
+  mutate(import_Patriot = str_remove_all(Patriot3, "\\D+")) %>% 
+  mutate(Spnbuy1 = str_remove_all(Spnbuy1, "\\D+")) %>% 
+  mutate(Spnbuy2 = str_remove_all(Spnbuy2, "\\D+")) %>% 
+    mutate(Spnbuy3 = str_remove_all(Spnbuy3, "\\D+")) %>% 
+    mutate(Spnbuy4 = str_remove_all(Spnbuy4, "\\D+")) %>% 
+    mutate(Spnbuy5 = str_remove_all(Spnbuy5, "\\D+")) %>% 
+    mutate(Spnbuy6 = str_remove_all(Spnbuy6, "\\D+")) %>% 
+    mutate(Spnbuy7 = str_remove_all(Spnbuy7, "\\D+")) %>% 
+    mutate(Spnbuy8 = str_remove_all(Spnbuy8, "\\D+")) %>% 
+    mutate(Spnbuy9 = str_remove_all(Spnbuy9, "\\D+")) %>% 
+    mutate(Spnbuy10 = str_remove_all(Spnbuy10, "\\D+")) 
+
+soccer <- soccer %>% 
+    mutate(Fut_Matches = Gamepln1) %>% 
+    mutate(Wish_Tv = Media11) %>% 
+    mutate(Pleased_Season2016 = Posaff1) %>% 
+    mutate(Pref_reserved = Seat1) %>% 
+    mutate(Likes_Online_Tickets = Ticket1) %>% 
+    mutate(Gender = as.factor(Gender)) %>% 
+    mutate(Race = as.factor(Race)) %>% 
+    mutate(Income = as.factor(Income))
+
+#soccer <- soccer %>% 
+ # mutate(Fut_Att = as.integer(Gampln2a) + as.integer(Gampln2b) + as.integer(Gampln2c) + as.integer(Gampln2d) + #as.integer(Gampln2e) + as.integer(Gampln2f))
+
+soccer <- soccer %>% 
+  mutate(Matchsat = str_replace(Matchsat, "Neutral", "4")) %>% 
+  mutate(Matchsat = str_replace(Matchsat, "Very Satisfied", "6"))
+
+
+soccer[soccer == "Strongly Disagree"] <- -3
+soccer[soccer == "Disagree"] <- -2
+soccer[soccer == "Somewhat disagree"] <- -1
+soccer[soccer == "Neutral"] <- 0
+soccer[soccer == "Somewhat agree"] <- 1
+soccer[soccer == "Agree"] <- 2
+soccer[soccer == "Strongly agree"] <- 3
+
+#soccer <- soccer %>% 
+ # mutate(across(IDteam1:Skill2, str_replace(, "")))
+
+
+
+soccer <- soccer %>% 
+  mutate(Website = Media8_1, Facebook = Media8_2, Twitter = Media8_3,  Instagram = Media8_4, YouTube = Media8_5, AttendAlone = Gamewit4, TVview = Media10) %>% 
+  select(-c(Media8_1, Media8_2, Media8_3, Media8_4, Media8_5, Gamewit4, Media10, Media11, dycom1, Benev1, Work4, Patriot3, Posaff1, Seat1, Ticket1))
+
+  #runs fully and has 42 variables
+colnames(soccer)
+
+soccer[, c(2:24, 41:47, 52:100)] <- sapply(soccer[, c(2:24, 41:47, 52:100)], as.numeric)#I would like Gender to stay the way it is
+
+
+
+```
+```{r, eval = FALSE}
+write.csv(soccer,"C:\\Users\\jorda\\OneDrive\\Documents\\5210R\\Tenth Week\\SoccerDataPBI.csv", row.names = FALSE)
+```
+
+
+
+
+```{r, eval=FALSE}
+sponsors <- soccer_og %>% 
+  select(Spnbuy1:Spnbuy10) %>% 
+  mutate(str_remove_all(c(Spnbuy1:Spnbuy10), "\\D+")) %>% 
+  mutatei(across(c(Spnbuy1:Spnbuy10), Median()))
+
+#I want to calculate the Medianfor each individual sponsor, 1-10 how likely they are to buy, definitely not working
+```
+
+
+```{r}
+head(soccer, 10)
+summary(soccer)
+str(soccer)
+vtable(soccer)
+
+```
+
+**comments**
+
+    - I have eliminated what I could from the set getting rid of duplicate variables and also focusing on combining where I
+    could.
+    - The majority of the variables have been turned into numeric sets by taking key words and putting them on a factored
+    sliding scale.
+    - Others already had numbers present in a string and so just needed a string to numeric conversion done. 
+    - A few of the larger subsets I have left as is so as to make it easy to custom filter and adjust down below for analysis,
+    such as the advertisement data, the sponsor data, the food data, etc.
+    - Important feedback variables seem to be "interest", "Attend1", "SpndlastS" and "lasttype". There might be more important
+    variables though that directly interact with our research questions. 
+    - Useless variables with too many null values have been dropped, but null values will be a constant consideration
+    throughout the analysis. I will be uisng n.rma = TRUE to help allow calculations and observations to be done around the 
+    null values.
+    
+    
++ Summary observations:
+
+    - A lot of the variables have some manner of skew to them except for the ranking questions that go from -3 to 3, the
+    majority of those have mean and Median centered at 0. When doing analysis I will have to determine for each if mean or
+    median makes the most sense for the context.
+    - Thanks to the tightly closed bounds of the questions there are not many super extreme outliers except for the strictly 
+    quantitative questions such as age and intended game attendance for 2017. 
+
++ Structure
+
+    - The majority of the data is either now numeric or will be modified into numeric below. A lot of the sliding values range
+    from 0 up to a value such as 6, 7, 8, or 10. Also a large proportion also sit from -3 to 3. 
+    - Many of the values that fit into a subset data group also have dichotomous properties, either a yes or a no notated with
+    1 or 0.
+    - These specific subsets will be pivoted below to help assist with analyzing the variables as factor levels. 
+    
+
+## Auto EDA attempts:
+```{r message = FALSE, warning = FALSE, eval=FALSE}
+# Create binned data set, pull revenue out as the target variable 
+Interest <- soccer$Interest
+
+# Create bins for continuous variables and dummys for factors
+soccer <- soccer %>% 
+  drop_na()
+
+soccer_binarized <- soccer %>%
+  select(-c(Interest)) %>% 
+  mutate_if(is.integer, as.numeric) %>% 
+  binarize(n_bins = 5, thresh_infreq = 0.01, name_infreq = "OTHER", one_hot = TRUE) 
+
+# Bring revenue back in to the data set
+soccer_binarized <- cbind(Interest, soccer_binarized) 
+
+# View the data
+head(soccer_binarized)
+
+```
+
+```{r message = FALSE, warning = FALSE, eval=FALSE}
+# Correlate the variables
+soccer_corr <- mtp_binarized %>%
+  mutate(revenue = as.numeric(revenue)) %>% 
+  correlate(revenue) 
+
+# View the data
+soccer_corr
+
+
+# View the correlation funnel
+soccer_corr %>%
+  plot_correlation_funnel()
+
+```
+    
+```{r}
+cor_soccer <- soccer %>% 
+  select_if(is.numeric) %>%   # Use to select just the numeric variables
+  cor()
+
+corrplot(cor_soccer,
+         method = "number",
+         sig.level = 0.05,
+         order = "original",
+         diag = FALSE,
+         type = "upper",
+         tl.srt = 45,
+         tl.col = "black")
+```
+**Comments**
+
+    - Far too messy to be useful in these circumstances, I am still interested in correlations, but it is not the most important part of the analysis.
+
+
+```{r, eval= FALSE}
+cor_soccer1 <- soccer %>% 
+  select_if(is.numeric) %>%   # Use to select just the numeric variables
+  drop_na()
+
+cor_soccer2 <- soccer %>% 
+  select_if(is.numeric) 
+
+bar_cor1 <- corr_cross(cor_soccer1, 
+           max_pvalue = 0.05, 
+           top = 10)
+           
+bar_cor1
+
+bar_cor2 <- corr_cross(cor_soccer1, 
+           max_pvalue = 0.05, 
+           top = 10)
+           
+bar_cor2
+
+lasttype_cor <- single_cor <- corr_var(soccer, 
+         lasttype,
+         top = 10)
+
+lasttype_cor
+```
+
+### inspectdf, useful just hard to read
+```{r}
+
+
+soccer %>% 
+  inspect_types() %>% 
+  show_plot()
+
+soccer %>% 
+  inspect_na() %>% 
+  arrange(-NA) %>% 
+  slice(1:20) %>% 
+  show_plot()
+
+soccer %>% 
+  inspect_cat() %>% 
+  show_plot()
+
+#soccer %>% 
+#  inspect_num() %>% 
+ # show_plot() #wish this would work
+
+soccer %>% 
+  inspect_cor() %>% 
+  arrange(-corr) %>%
+  slice(1:15) %>% 
+    show_plot() #numerics only 
+
+```
+**Comments**
+
+    - The majority of the data is numeric, as stated above
+    - The remaining NAs aren't too troublesome, though it is a shame that matchimp is at 18% since that is one of our 
+    preffered comparison varaibles for answering our research question.
+    - All other NA percentages appear to be insignificant.
+
++ Categorical Propportions
+
+    - Majority of our respondents are white, Female, with $80k + income 
+    - Much of the media outreach has little to no impact on our group but promo1 seems to be most significant out of the given
+    listed group so far.
+    - Nothing too shocking out of the correlation conditions, many of the subset data categories correlate with eachother. 
+    - It is interesting to note as well that 3% of all the data appears to be missing. 
+### DataExplorer
+```{r, eval=TRUE}
+soccer %>% 
+  plot_intro()
+
+soccer %>% 
+  plot_missing()
+
+soccer %>% 
+  plot_bar()#useful
+
+soccer %>% 
+  plot_histogram()#useful
+
+soccer %>% 
+  plot_correlation(maxcat = 5L)#wish this would work
+
+soccer %>% 
+  plot_boxplot(by = "Interest")#useful
+
+soccer %>% 
+  select_if(is.numeric) %>% 
+  plot_scatterplot(by = "Interest")#with this would work
+```
+**Comments**
+
+    - The majority of individuals do not attend the game alone
+    - Majority of our audience in this survey seems to be 30-50 years old
+    - Sliding scale on sponsor and game time preferences makes it difficult to determine anything practical
+    - I will have to choose a threshold of importance for many of these things to make it reasonable to analyze 
+    favorability. 
+    - The majority of individuals want to attend 8 or more games it appears, the more interest generally the more
+    games they want to attend
+    - interest doesn't seem to strictly dictate ticket type. 
+    - Interest seems to impact spending levels. 
+    - Dot graphs seem useless since so many values and rows were removed, and there aren't any clumping patterns that are
+    worth focusing on.
+    
+**Questions** 
+
+    - WHy doesn't interest levels seem to always dictate ticket type? 
+    - Do interest levels impact who went to the 2016 games?
+    - Does the younger audience feel more interested in the team?
+    - What is the outlook for 2017 compared to 2016?
+    
+
+
+```{r, eval=FALSE}
+create_report(soccer, y = "Interest")#very useful!!
+
+```
+### trelliscopejs, highly interactive, just need variables
+```{r, eval=FALSE}
+
+soccer %>% 
+  ggplot(aes(x = price, y = revenue)) + #not sure what variables to put here
+  geom_point(aes(color = Interest)) +
+  geom_smooth(method = "lm") +
+  theme_bw() +
+  facet_trelliscope(~ brand, nrow = 2, ncol = 3, self_contained = TRUE)
+
+```
+### esquisse
+```{r, eval=FALSE}
+WORKS!
+#go up to the add ins, click ggplot2 builder, then drag and drop the code. very similar to ggannotate
+soccer %>%
+ filter(!(ADDIN2 %in% " ")) %>%
+ filter(!(ADDIN3 %in% " ")) %>%
+ filter(!(ADDIN4 %in% " ")) %>%
+ filter(!(ADDIN5 %in% " ")) %>%
+ filter(!(ADDIN6 %in% " ")) %>%
+ ggplot() +
+  aes(x = Promo1, y = Interest) +
+  geom_tile(size = 1.2) +
+  theme_minimal()
+```
+
+Now after cleaning start here:
+
+# Base EDA Step 1: Uni-variate non-graphical EDA
+```{r, eval = FALSE}
+# look at the data
+head(soccer, 10)
+str(soccer)
+vtable(soccer)
+summary(soccer)
+```
+
+**comments**
++Same as above
+
+    - I have eliminated what I could from the set getting rid of duplicate variables and also focusing on combining where I
+    could.
+    - The majority of the variables have been turned into numeric sets by taking key words and putting them on a factored
+    sliding scale.
+    - Others already had numbers present in a string and so just needed a string to numeric conversion done. 
+    - A few of the larger subsets I have left as is so as to make it easy to custom filter and adjust down below for analysis,
+    such as the advertisement data, the sponsor data, the food data, etc.
+    - Important feedback variables seem to be "interest", "Attend1", "SpndlastS" and "lasttype". There might be more important
+    variables though that directly interact with our research questions. 
+    - Useless variables with too many null values have been dropped, but null values will be a constant consideration
+    throughout the analysis. I will be uisng n.rma = TRUE to help allow calculations and observations to be done around the 
+    null values.
+    
+    
++ Summary observations:
+
+    - A lot of the variables have some manner of skew to them except for the ranking questions that go from -3 to 3, the
+    majority of those have mean and Median centered at 0. When doing analysis I will have to determine for each if mean or
+    median makes the most sense for the context.
+    - Thanks to the tightly closed bounds of the questions there are not many super extreme outliers except for the strictly 
+    quantitative questions such as age and intended game attendance for 2017. 
+
++ Structure
+
+    - The majority of the data is either now numeric or will be modified into numeric below. A lot of the sliding values range
+    from 0 up to a value such as 6, 7, 8, or 10. Also a large proportion also sit from -3 to 3. 
+    - Many of the values that fit into a subset data group also have dichotomous properties, either a yes or a no notated with
+    1 or 0.
+    - These specific subsets will be pivoted below to help assist with analyzing the variables as factor levels. 
+    
+
+**Questions**
+
+    - What impacts match satisfaction?
+    -What impacts team loyalty?
+    -WHat influences game day purchases?
+
+## Making Factor levels from data subsets:
+```{r}
+
+
+#tryingto get sponsors to all be factor levels:
+
+
+soccer_Sponsors <- soccer %>% 
+select(Spnbuy1:Spnbuy10) %>%
+rename(Subaru = Spnbuy1, Microsoft = Spnbuy2, Pepsi = Spnbuy3, BECU = Spnbuy4, Chihuly = Spnbuy5, Hardrock = Spnbuy6, HealthWarrior = Spnbuy7, Hyatt = Spnbuy8, Kraken = Spnbuy9, Ruffneck = Spnbuy10) %>% 
+pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 5, na.rm = TRUE))#this is for the group that is considered likely or greater
+
+
+soccer_advertisements <- soccer %>% 
+  select(Newspaper_Ad:WOMFam) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value == 3, na.rm = TRUE))
+
+FutTicket_sales <- soccer %>% 
+  select(Gampln2a:Gampln2f) %>% 
+  rename(Season = Gampln2a, FiveMatchPack = Gampln2b, ThreeMatchPack = Gampln2c, SingleMatch = Gampln2d, Pitchside = Gampln2e, Undecided = Gampln2f) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value, na.rm = TRUE))
+
+soccer_merch_services <- soccer %>% 
+  select(Buymer1:BuySpon1) %>% 
+  rename(Wants_Merch = Buymer1, Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, 
+         Pref_Sponser = BuySpon1) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 1, na.rm = TRUE))
+
+soccer_loyalty <- soccer %>% 
+  select(IDteam1:Skill2) %>% 
+  rename(Real_Fan = IDteam1, Player_Fan = IDplay1, Coach_Fan = IDcoach1, Hope_Fan = HopeS1, Womens_Fan = IDsport1, Community_Fan = IDcomm2, Knowledge_Fan = Knowledg3, Escape_Fan = Escape1, Skill_Fan = Skill2) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 1, na.rm = TRUE))
+
+soccer_GameTime <- soccer %>% 
+  select(GameTim1:GameTim7) %>% 
+  rename(Wed_Eve = GameTim1, Frid_Eve = GameTim2, Sat_1pm = GameTim3, Sat_4pm = GameTim4, Sat_Eve = GameTim5, Sund_4pm = GameTim6, Sund_Eve = GameTim7) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 5, na.rm = TRUE))
+
+soccer_food <- soccer_og %>% 
+  select(Consat3:Consat5)
+
+soccer_food[soccer_food == "Very Dissatisfied"] <- 2
+soccer_food[soccer_food == "Dissatisfied"] <- 3
+soccer_food[soccer_food == "Neutral"] <- 4
+soccer_food[soccer_food == "Satisfied"] <- 5
+soccer_food[soccer_food == "Very Satisfied"] <- 6
+
+soccer_food_dis <- soccer_food %>% 
+  select(-c(Beersat1, Consat2)) %>% 
+  rename(General_Options = Consat3, Prices_Food = Consat4, Quality = Consat1, Wait_Food = Consat9, Wait_Drink = Consat6, Conven_Food_Loc = Consat8, Courteous = Prsnsat4, Prices_Drink = Consat5 ) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value <= 3, na.rm = TRUE))
+
+soccer_food_plzd <- soccer_food %>% 
+  select(-c(Beersat1, Consat2)) %>% 
+  rename(General_Options = Consat3, Prices_Food = Consat4, Quality = Consat1, Wait_Food = Consat9, Wait_Drink = Consat6, Conven_Food_Loc = Consat8, Courteous = Prsnsat4, Prices_Drink = Consat5 ) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 4, na.rm = TRUE))
+
+#do this also with other stuff if need be
+#vtable(soccer)
+```
+# Base EDA Step 2: Uni-variate graphical EDA
+
++ Here we will examine each variable individually
+
++ Examine how many observations in each variable
+
+## Categorical/Factor variables:
+
+```{r}
+Race <- ggplot(data = soccer, mapping = aes(Race))
+Income <- ggplot(data = soccer, mapping = aes(Income))
+Age <- ggplot(data = soccer, mapping = aes(Age))
+Interest <- ggplot(data = soccer, mapping = aes(Interest))
+Attend1 <- ggplot(data = soccer, mapping = aes(as.factor(Attend1)))
+Attend2 <- ggplot(data = soccer, mapping = aes(as.factor(Attend2)))
+lasttype <- ggplot(data = soccer, mapping = aes(as.factor(lasttype)))
+AttendAlone <- ggplot(data = soccer, mapping = aes(as.factor(AttendAlone)))
+YouTube <- ggplot(data = soccer, mapping = aes(YouTube))
+Fut_Att <- ggplot(data = soccer, mapping = aes(Fut_Att))
+Newspaper_Ad  <- ggplot(data = soccer, mapping = aes(Newspaper_Ad))
+Billboard_Ad <- ggplot(data = soccer, mapping = aes(Billboard_Ad))
+Radio_Ad <- ggplot(data = soccer, mapping = aes(Radio_Ad))
+IDteam1 <- ggplot(data = soccer, mapping = aes(IDteam1))
+IDplay1 <- ggplot(data = soccer, mapping = aes(IDplay1))
+IDcoach1 <- ggplot(data = soccer, mapping = aes(IDcoach1))
+Pleased_Season2016 <- ggplot(data = soccer, mapping = aes(as.factor(Pleased_Season2016)))
+Cause1 <- ggplot(data = soccer, mapping = aes(as.factor(Cause1)))
+Cost3 <- ggplot(data = soccer, mapping = aes(as.factor(Cost3)))
+Matchsat <- ggplot(data = soccer, mapping = aes(as.factor(Matchsat)))
+```
+
+
+```{r}
+grid.arrange(
+Race + geom_bar(fill = "blue") + coord_flip(),
+Income + geom_bar(fill = "blue") + coord_flip(),
+Age + geom_bar(fill = "blue") + coord_flip(),
+Interest + geom_bar(fill = "blue") + coord_flip(),
+ncol = 1)
+
+grid.arrange(
+Attend1 + geom_bar(fill = "blue") + coord_flip(),
+Attend2 + geom_bar(fill = "blue") + coord_flip(),  
+lasttype + geom_bar(fill = "blue") + coord_flip(),
+ncol = 1)
+
+grid.arrange(
+AttendAlone + geom_bar(fill = "blue") + coord_flip(),
+Matchsat + geom_bar(fill = "blue") + coord_flip(),
+YouTube + geom_bar(fill = "blue") + coord_flip(), 
+ncol = 1)
+
+grid.arrange(
+Newspaper_Ad + geom_bar(fill = "blue") + coord_flip(),
+Billboard_Ad + geom_bar(fill = "blue") + coord_flip(),
+Radio_Ad + geom_bar(fill = "blue") + coord_flip(),
+ncol = 1)
+
+grid.arrange(
+IDteam1 + geom_bar(fill = "blue") + coord_flip(),
+IDplay1 + geom_bar(fill = "blue") + coord_flip(),
+IDcoach1 + geom_bar(fill = "blue") + coord_flip(),
+ncol = 1)
+
+grid.arrange(
+Pleased_Season2016 + geom_bar(fill = "blue") + coord_flip(),
+Cost3 + geom_bar(fill = "blue") + coord_flip(),
+ncol = 1)
+```
+**Comments**
+
+    - Majority of our audience from the survey is white, with high income.
+    - We do have a fair spread of ages, but the majority seem to be between age 30 to 50.
+    - Many of our survey respondents would say they are interested in the team, more so than uninterested. 
+    - It is interesting that not many of the fans are die hard fans though
+    - Of course everyone who is responding to this survey SHOULD have attended a game before. I assume a majority of the NAs
+    have attended as well.
+    - 2013 and 2015 are the most popular first attendance years from our respondents.
+    - The majority of respondents use match tickets comapred to season tickets. 
+    - Roughly 15% of our respondents go to games alone
+    - Matchimp is the overall game day experience, and it seems that the majoirty do really like their experience.
+    - youtube does not get nearly as much traffic each week as I expected. almost 350 respondents say they don't use it at all
+    which is over half of our respondents.
+    - Newspaper gets used even less along with billboards and radio.
+    - Majority of the respondents would consider themselves to be real fans
+    - They don't seem to all gravitate to one player, but rather the team as a whole. 
+    - A lot of people really like the coach though, which is surprising to me
+    - Majority of people are happy with the 2016 season to atleast some degree
+    - over 400 of our 684 respondents think that attending the games is inexpensive. Doesn't seem to be a need to lower prices
+
+**Questions**
+
+    - How much does ticket discount help with sales?
+    - What is the best way to reach the "real fans"?
+
+```{r}
+grid.arrange(
+  
+  soccer_Sponsors %>% 
+  arrange(-value) %>% 
+  slice(1:8) %>% 
+ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) + 
+  geom_col() + coord_flip(),
+
+soccer_advertisements %>% 
+  arrange(-value) %>% 
+  slice(1:8) %>% 
+ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) + 
+  geom_col() + coord_flip(),
+
+ncol = 1)
+```
+**Comments**
+
+    - BECU, Ruffneck and Microsoft appear to be the most popular sponsors
+    - By the respondents rating Ticket Discounts seem to be the most alluring form of advertisement
+    - Then after that Email Advertisements.
+    - It is interesting that general internet ads are not as impactful for individuals, and it is interesting that twitter based ads aren't as impacting even though twitter is our most used platform on season. 
+
+**Questions**
+
+    - What form of Ad is most important to certain groups?(age, fan, income, etc.)
+    - What is the best ad for each platform?2
+
+```{r}
+grid.arrange(
+soccer_merch_services %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() + coord_flip(),
+  
+soccer_loyalty %>% 
+    arrange(-value) %>% 
+  slice(1:8) %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() + coord_flip(),
+ncol=1)
+```
+**Comments**
+
+    - A lot of fans really want merch, it seems we might be under selling to them at the moment?
+    - Game day match merch seems to be the most popular merch selection spot, with almost half of respondents feeling
+    favorable towards sponsor merchandise and services.
+    - Individuals are more of a fan of the coach than Hope Solo (which is surprising to me)
+    - Many are fans of womens soccer in general, come for the skill of the game and because they are fans of the womens soccer     league in general.
+    
+**Questions**
+
+    - What impacts merch purchasing and spending habbits?
+    - How do we capitalize on people being fans of the whole league in general? Many don't seem to just be Reign Fans.
+    - How impactful are these factors on a Interest comparison level?
+    
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999", "#666699") 
+grid.arrange(
+Future_tickets <- 
+            ggplot(data = FutTicket_sales, mapping = aes(x = name, y = value, fill = as.factor(name))) + 
+  geom_col() + scale_fill_manual(values = cb_palette) + 
+  labs(title = "Single Match Is Most Popular", x = "Ticket Type", y = "Count of Fans") +
+  coord_flip() + theme_classic() + theme(legend.position = "none"),
+
+
+#Future_tickets,
+
+soccer_GameTime %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip(),
+  
+ncol = 1)
+
+ggsave(filename = "FutureTickets.png", plot = Future_tickets)
+
+#ggannotate(Future_tickets)
+```
+**comments**
+
+    -It is interesting that so many individuals seem pleased with the team, but almost half of our respondents only want to 
+    purcahse single game tickets, but may end up going to several games.
+    - Wednesday evening is the most popular game time. 
+    
+**Questions** 
+
+    - Is game time relevant to attendance?
+    - What can be done to increase season ticket sales?
+```{r}
+Future_tickets
+```
+**Comments**
+
+    - For future ticket sales it seems single match and season long tickets are the most popular, but three match packs are
+    very under used
+    - Wednesday evening seems like the best time for the majority of individuals.
+**Questions**
+
+    - Why are so many people looking just to get single match tickets even though many say they want to come to  8 + games
+    next season?
+    - Is it possible to keep all the matches on either Wednesday or Sunday Evening?
+    - Do TV watchers prefer this too?
+```{r}
+grid.arrange(
+  
+soccer_food_plzd %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip(),
+
+soccer_food_dis %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip(),
+  
+ncol = 1)
+
+```
+**Comments**
++Group that was pleased
+
+    - about 60% of our respondents felt that the food was generally good quality
+    - majority are pleased with the prices, and wait time on foods (which is surprising to me)
+    - almost everyone felt that the staf was courteous and the location of the food was good.
++ Displeased Group
+
+    - The most probelmatic things for those that are unhappy are the wait on food specifically and the general options at the
+    concessions. Perhaps we should add more variety?
+**Questions**
+
+    - How do different factors of demographic impact spending habbits?
+    - Do we make a lot of profit from the food sold or the tickets?
+
+### Viewership habbits
+```{r}    
+soccer_viewership <- soccer %>% 
+  select(Website:TVview) %>% 
+  select(-c(AttendAlone)) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value, na.rm = TRUE))
+
+soccer_access <- soccer %>% 
+  select(Wish_Tv, Pref_reserved, Likes_Online_Tickets) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 1, na.rm = TRUE))
+  
+grid.arrange(
+  
+soccer_viewership %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() + coord_flip(),
+
+soccer_access %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip(),
+  
+ncol = 1)
+
+```
+**Comments**
+
+    - Tv Viewership and twitter are our biggest access points for non in person consumption!
+    - Alongside that, more people wish they could watch more games on national TV 
+    - The majority of individuals really like the online tickets.
+    - Reservations seem important to about 100 individuals, but not most.
+    
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF")
+
+Changes_preferred <- soccer_access %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() + 
+  theme(axis.ticks.x = element_blank()) +
+  coord_flip() +labs(title = "Increasing National TV Presence", subtitle = "Respondents showed that having a national TV presence is very \nimportant to them, as well as wanting online tickets available for matches", x = "Improvements", y = "Votes On Improvements") + 
+  theme_classic() +
+  theme(legend.position = "none") +
+  theme(axis.ticks.y = element_blank()) +
+  scale_fill_manual(values = cb_palette) +
+  
+geom_text(data = data.frame(x = c(1.05093774399337, 2.03121219191524, 2.97844368091838),
+  y = c(70.1051287277996, 77.0324779087558, 120.587316435754),
+  label = c("Wants Online \nTickets", "Wants Reserved \nSeats", "Wants National TV Presence")),
+  mapping = aes(x = x, y = y, label = label),
+  colour = "white", inherit.aes = FALSE)
+
+Changes_preferred
+
+ggsave(filename = "WishingForTV.png", plot = Changes_preferred)
+
+```
+
+```{r, eval=FALSE}
+soccer_Ethics <- soccer %>% 
+  select(import_commitment:import_deligence) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 4, na.rm = TRUE))
+
+
+grid.arrange(
+  
+soccer_Ethics %>% 
+  arrange(-value) %>% 
+  slice(1:8) %>% 
+ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) + 
+  geom_col() + coord_flip(),
+  
+ncol = 1)
+
+```
+
+## Quantitative variables
+
+```{r}
+gamelast <- ggplot(data = soccer, mapping = aes(gamelast))
+spndsum <- ggplot(data = soccer, mapping = aes(spndsum))
+Gamepln1 <- ggplot(data = soccer, mapping = aes(Gamepln1))
+TVview <- ggplot(data = soccer, mapping = aes(TVview))
+```
+
+
+```{r}
+grid.arrange(
+gamelast + geom_bar(fill = "blue") + coord_flip(),
+spndsum + geom_bar(fill = "blue") + coord_flip(),
+Gamepln1 + geom_bar(fill = "blue") + coord_flip(),
+ncol = 1)
+
+grid.arrange(
+ 
+TVview + geom_bar(fill = "blue") + coord_flip(), 
+ncol = 1)
+```
+
+**Comments**
+
+    - In 2016 it seems the majority of folks attended 5 or less games, with a group of loyal fans going to 12 games. few went
+    to 13 or more, even considering season ticket 
+    - The spending amounts vary quite a bit, but it seems that topping out at $350, the majority of individuals do spend extra
+    money at the game, between $20 and $100. Then some do spend larger amounts towards the top.
+    - It is interesting that a large portion of the distribution does not intend to go to many more games that year. Then 
+    there is a large group of "die hard" fans who plan to go to 12 more games!
+    
+    - It appears that the majority of the respondents barely watched the team on TV throughout the whole season. However, as 
+    shown previously, the respondents showed a demand for watching games on National TV. 
+
+**Questions**
+
+    - Who spends the most at games?
+    - Do people stop going to games when they watch more on media platforms?
+# Base EDA Step 3: Multi-variate non-graphical 
+
+## Categorical 
+### List all Reasonable variable combinations
+
+### Interest and Age
+```{r}
+# standard counts
+soccer %>% 
+  group_by(Age, Interest) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  tabyl(Interest, age_group) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+
+# Proportion contingency/cross table
+soccer %>% 
+  group_by(Age, Interest) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  tabyl(Interest, age_group) %>% 
+  adorn_totals(where = c("row", "col")) %>%  # Total margins
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) %>%  # round decimals
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+```
+
+**Comments**
+
+    - The vast majority of the resopndents would say they are loyal fans and the largest fans are from age 40-50 years
+    for the loyal fan categorey
+
+**Questions**
+
+    - What age group and demographic is are most important to reach out to?
+    
+```{r}
+# standard counts
+soccer %>% 
+  tabyl(Attend2, gamelast) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+
+# Proportion contingency/cross table
+soccer %>% 
+  tabyl(Attend2, gamelast) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>%  # Total margins
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) %>%  # round decimals
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+```
+
+**Comments**
+
+    - Reasonably even distribution of attendance for number of games in the last season from 2016
+    - Nothing too shocking compared to seeing this as a graph. 
+
+
+```{r}
+# standard counts
+soccer %>% 
+  group_by(Age, Interest) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  tabyl(Race, age_group) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+
+# Proportion contingency/cross table
+soccer %>% 
+  group_by(Age, Interest) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  tabyl(Race, age_group) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>%  # Total margins
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) %>%  # round decimals
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+```
+
+**Comments**
+
+    - Age itself is spread between mostly between mid twenties to mid 50s,  but race is dominantly white
+
+## Quantitative Variables
+
+### List all Reasonable variable combinations
+```{r}
+# standard counts
+soccer %>% 
+  tabyl(Gamepln1, spndsum) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+
+# Proportion contingency/cross table
+soccer %>% 
+  tabyl(Gamepln1, spndsum) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>%  # Total margins
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) %>%  # round decimals
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+```
+
+**Comments**
+
+    - It is interesting to consider that nearly a quarter of our respondents spend no money at the games. Why is that?
+    - The spending is then mostly evenly distributed.
+
+
+```{r}
+
+soccer %>% 
+  tabyl(gamelast, TVview) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+
+soccer %>% 
+  tabyl(gamelast, TVview) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>%  # Total margins
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) %>%  # round decimals
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+```
+
+**Comments**
+
+    - THose that watched no games actually attended the most from last season.
+    - Even distribution beyond that. 
+
+## Mixed Variables
+### Age and Spending Summed
+```{r}
+# standard counts
+soccer %>% 
+  group_by(Age, spndsum) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  tabyl(age_group, spndsum) %>% # creates tablf counts
+  adorn_totals(where = c("row", "col")) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+
+# Proportion contingency/cross table
+soccer %>% 
+  group_by(Age, spndsum) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>%
+  tabyl(age_group, spndsum) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>%  # Total margins
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) %>%  # round decimals
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+```
+**Comments**
+
+    - The 30-40 age is our most common age and the biggest spending age it seems
+    - It is worth noting that a third of our respondents spent between $0-$100.
+    
+```{r}
+# standard counts
+soccer %>% 
+  group_by(Age, lasttype) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  tabyl(lasttype, age_group) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+
+# Proportion contingency/cross table
+soccer %>% 
+  group_by(Age, lasttype) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  tabyl(lasttype, age_group) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) %>%  # Total margins
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) %>%  # round decimals
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped") 
+```
+**Comments**
+
+    - Seasons tickets seem most common in the group 50 years or younger
+    - Match tickets are the most popular though for almost all age groups
+
+# Base EDA Step 4: Multi-variate graphical
+
+## Step 4.1: Categorical
+
+### Last Type with loyalty indicators
+```{r}
+grid.arrange(
+  soccer %>% 
+    mutate(lasttype = as.factor(lasttype)) %>% 
+    filter(Interest >= 3) %>% 
+    ggplot(mapping = aes(x = Interest, fill = lasttype)) +
+    geom_bar(position = "dodge"),
+  
+soccer %>% 
+  mutate(lasttype = as.factor(lasttype)) %>% 
+  #mutate(Pleased_Season2016 = (Pleased_Season2016 >= 1)) %>% 
+  filter(Pleased_Season2016 >= 1) %>% 
+  ggplot(mapping = aes(x = Pleased_Season2016, fill = lasttype)) +
+  geom_bar(position = "dodge"),
+
+soccer %>% 
+  mutate(lasttype = as.factor(lasttype)) %>% 
+  filter(Attend17 >= 1) %>% 
+    ggplot(mapping = aes(x = Attend17, fill = lasttype)) +
+    geom_bar(position = "dodge"),
+
+ncol = 1)
+#I want the second to to only be 1+ on the x axis
+```
+
+**Comments**
+
+    - Interesting that group 4 is actually the group with the largest amount of season ticket holders by far
+    - Those with season tickets from last season weren't necessarily always greatly pleased with the season.
+    - Even those anticipating attending next season are doing so with match tickets more than season tickets
+
+**Questions**
+
+    - What causes individuals to buy season tickets?
+    - How do we make sure all season ticket holders are happiest?
+
+###
+```{r}
+
+grid.arrange(
+soccer %>% 
+    mutate(Likes_Online_Tickets = as.factor(Likes_Online_Tickets)) %>% 
+    filter(Likes_Online_Tickets == c(1,2,3)) %>% 
+    filter(Website >= 2) %>% 
+    ggplot(mapping = aes(x = Website, fill = Likes_Online_Tickets)) +
+    geom_bar(position = "dodge"),
+  
+soccer %>% 
+    mutate(Likes_Online_Tickets = as.factor(Likes_Online_Tickets)) %>% 
+    filter(Likes_Online_Tickets == c(1,2,3)) %>% 
+    ggplot(mapping = aes(x = Facebook, fill = Likes_Online_Tickets)) +
+    geom_bar(position = "dodge"),
+
+soccer %>% 
+    mutate(Likes_Online_Tickets = as.factor(Likes_Online_Tickets)) %>% 
+    filter(Likes_Online_Tickets == c(1,2,3)) %>% 
+    ggplot(mapping = aes(x = YouTube, fill = Likes_Online_Tickets)) +
+    geom_bar(position = "dodge"),
+
+ncol = 1)
+#I want the second to to only be 1+ on the x axis
+```
+**Comments**
+
+    - It appears that those who are using online websites to view the team aren't looking to buy tickets from online sources to be in person.
+**Questions**
+
+    - How do we encourage online viewers to come in person?
+    - How does place of viewership impact ad impact?
+    - How does place of viewership impact sponsor favor?
+    - How does ad impact contribute to sponsor favor?
+### Advertisements by age group
+```{r}
+soccer_advertisements_age <- soccer %>% 
+  select(Newspaper_Ad:WOMFam, Age) %>% 
+  pivot_longer(cols = -c(Age)) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  group_by(age_group, name) %>% 
+  summarise(value = sum(value>=1, na.rm = TRUE)) %>% 
+  group_by(age_group) %>% 
+  arrange(-value)%>%
+  slice(1)
+
+
+soccer_advertisements_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip()
+#Why wont this work?
+
+#?pivot_longer()
+#?slice()
+```
+
+**Comments**
+
+    - Ticket Discount By and large looks like the most effective form of advertisement for almost all age groups.
+
+**Questions**
+
+    - How could ticket discounts and email ads be implimented to be most effective?
+    - What does each ticket type prefer as an advertisement?
+    - DO advertisements impact merch and game attendance?
+### ID with Team(loyalty) and age
+```{r}
+
+soccer_loyalty_age <- soccer %>% 
+  select(IDteam1:Skill2, Age) %>% 
+  select(-c(IDnattm1)) %>% 
+  rename(Real_Fan = IDteam1, Player_Fan = IDplay1, Coach_Fan = IDcoach1, Hope_Fan = HopeS1, Womens_Fan = IDsport1, Community_Fan = IDcomm2, Knowledge_Fan = Knowledg3, Escape_Fan = Escape1, Skill_Fan = Skill2) %>% 
+  pivot_longer(cols = -c(Age)) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>%
+  group_by(age_group, name) %>% 
+  summarise(value = sum(value >= 1, na.rm = TRUE)) %>% 
+  group_by(age_group) %>% 
+  arrange(-value) %>%
+  slice(1)
+
+
+
+soccer_loyalty_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip()
+
+```
+
+**Comments**
+
+    - Looking at what the most popular draw is for age groups it seems that being a womens fan is really important for 
+    everyeone under 60. 
+    - However 60-70 year olds are more excited about the skill of the game it appears. 
+
+**Questions**
+
+    - What is the difference between being a fan of the league of the team?
+    - We can't really use the fact that the like the league to our advantage, what other preferences are there that we 
+    could use to show boat and increase interest?
+    
+### ID with Team(loyalty) and last type
+```{r}
+
+soccer_loyalty_type <- soccer %>% 
+  select(IDteam1:Skill2, lasttype) %>% 
+  select(-c(IDnattm1)) %>% 
+  rename(Real_Fan = IDteam1, Player_Fan = IDplay1, Coach_Fan = IDcoach1, Hope_Fan = HopeS1, Womens_Fan = IDsport1, Community_Fan = IDcomm2, Knowledge_Fan = Knowledg3, Escape_Fan = Escape1, Skill_Fan = Skill2) %>% 
+  pivot_longer(cols = -c(lasttype)) %>% 
+  group_by(lasttype, name) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  group_by(lasttype) %>% 
+  arrange(-value) %>%
+  slice(1)
+
+
+
+soccer_loyalty_type %>% 
+  ggplot(mapping = aes(x = lasttype, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip()
+```
+
+**Comments**
+
+    - Not surprising to see that many are just fans of womens soccer. Not as useful since there isn't much we can act on to         make them more of what they already are.
+
+**Questions**
+
+    - Do the ticket types have a lot of similarities or differences when it comes to loyalty, satisfaction and interest?
+## Step 4.2: Quantitative
+
+```{r}
+grid.arrange(
+soccer %>% 
+    mutate(lasttype = as.factor(lasttype)) %>% 
+    ggplot(mapping = aes(x = Income, y = spndsum), fill = lasttype) +
+    geom_point(),
+  
+soccer %>% 
+    mutate(Likes_Online_Tickets = as.factor(Likes_Online_Tickets)) %>% 
+    ggplot(mapping = aes(x = Income, y = Gamepln1, )) +
+    geom_point(),
+
+soccer %>% 
+    mutate(Likes_Online_Tickets = as.factor(Likes_Online_Tickets)) %>% 
+    ggplot(mapping = aes(x = gamelast, y = Gamepln1)) +
+    geom_point(),#would be cool to see with last type included
+
+ncol = 1)
+```
+
+**Comments**
+
+    - Spending and plans for upcoming games seem to be evenly distributed throughout the wealth brackets.
+    - There might be a small trend between how many games they did attend last season and what they will attend.
+
+## Step 4.2: Quantitative
+
+```{r}
+grid.arrange(
+soccer %>% 
+    mutate(lasttype = as.factor(lasttype)) %>% 
+    ggplot(mapping = aes(x = spndsum, Gamepln1), fill = lasttype) +
+    geom_point(),
+  
+soccer %>% 
+    mutate(Likes_Online_Tickets = as.factor(Likes_Online_Tickets)) %>% 
+    ggplot(mapping = aes(x = spndsum, y = gamelast, )) +
+    geom_point(),
+
+soccer %>% 
+    mutate(Likes_Online_Tickets = as.factor(Likes_Online_Tickets)) %>% 
+    ggplot(mapping = aes(x = spndsum, y = TVview, )) +
+    geom_point(),
+
+ncol = 1)
+```
+
+**Comments**
+
+    - Individuals have gone to a lot of games, and plan to to a lot of games regardless of how much they spend at them.
+    - Some of our top spenders also watch a lot of the games on TV
+
+**Questions**
+
+    - How do we increase interest in spending at the games?
+    - Is there an optimal way to present merchandise?
+## Step 4.3: Categorical and quantitative
+### Age and Interest
+```{r}
+soccer %>% 
+  group_by(Age, Interest) %>% 
+  ggplot() +
+  geom_point(mapping = aes(x = Age, y = spndsum, color = Interest)) +
+  theme_classic()
+```
+
+**Comments**
+
+    - No easily identifiable patterns
+    
+**Questions**
+
+    - How do we market to each group to promote interest in the team, merch and sponsors?
+    - How does match satisfaction impact spending?
+#Interest and Spndsum
+```{r}
+soccer %>% 
+  group_by(Interest, spndsum) %>% 
+  summarise(spndsum_med = median(spndsum, na.rm = TRUE)) %>% 
+  ggplot() +
+  geom_col(mapping = aes(x = Interest, y = spndsum_med), fill = "blue") + #did I do this right? trying to get median
+  theme_classic()
+```
+
+**Comments**
+
+    - It is weird to consider that those with the 4th ranked interest/loyalty are the highest spenders on median.
+    - This graph isn't doing exactly what I want it to, will fix up below.
+### Interest with team(IDteam1) and Spending Sum
+```{r}
+soccer %>% 
+  group_by(Interest, spndsum) %>% 
+  ggplot() +
+  geom_col(mapping = aes(x = IDteam1, y = median(spndsum, na.rm = TRUE)), fill = "blue") + #did I do this right? trying to get median
+  theme_classic()
+```
+
+**Comments**
+
+    - Yep, the more you identify with the team the more likely you are to spend money.
+
+
+
+#Interest with lasttype
+```{r, eval = TRUE}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#999999")
+
+Interest_spndsum_typ <- soccer %>% 
+  select(Interest, lasttype, spndsum) %>% 
+  filter(Interest >= 3) %>% 
+  filter(lasttype < 3) %>% 
+  drop_na() %>% 
+  group_by(lasttype, Interest) %>% 
+  summarise(med_spndsum = median(as.numeric(spndsum))) %>% 
+  mutate(lasttype = as.factor(lasttype)) %>% 
+  group_by(lasttype, Interest) %>% 
+  ggplot(mapping = aes(x = Interest, y = (med_spndsum), fill = as.factor(lasttype), legend = "none")) +
+  geom_col(position = "dodge") + #why does it not like last type?
+  guides(color = "none", labels = "none") +
+  theme_classic() +
+  guides(color = "none", labels = "none") +
+  scale_fill_manual(values = cb_palette) + 
+  guides(color = "none", labels = "none") +
+    labs(title = "Who Spent The Most Last Season?", subtitle ="As is shown our season ticket holders spent the most overall, even the amount \nincreases with their interest", x = "Levels Recorded of Interest", y = "Spent dollars per person") +
+  coord_flip() + guides(color = "none", labels = "none") +
+  
+  geom_text(data = data.frame(x = c(4.77774784638295, 3.80053675611085, 5.23890364179226, 4.22875285184806, 3.24056186168526, 2.80136586605734 ),
+y = c(29.4086161462097, 29.0991649301444, 30.6464210104711, 30.3369697944058, 23.8384942570333, 23.4226691854455),
+label = c("Match Pack Holders", "Match Pack Holders", "Season Ticket Holders", "Season Ticket Holders", "Season Ticket Holders", "Match Pack Holders")),
+mapping = aes(x = x, y = y, label = label),
+size = 4.23, colour = "White", inherit.aes = FALSE) +
+
+ theme(legend.position = "none")
+
+Interest_spndsum_typ
+
+#ggannotate(Interest_spndsum_typ)
+
+ggsave(filename = "SpendingByTypeAndInterest.png", plot = Interest_spndsum_typ)
+```
+
+**Comments**
+
+    - It appears that season tickets are more popular the more of an ID with the team the individual has
+    -However it is interesting how popular match tickets are at the 2nd rating.
+
+
+**Questions**
+
+    - How much do we make off of each ticket type? Is it safe to assume we want to sell more season tickets since they are        more likely to spend the most?
+
+#IDteam1 with Interest
+```{r, eval = TRUE}
+#not sure why this isn't running either
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+
+soccer %>% 
+  group_by(Interest, Gamepln1) %>% 
+  ggplot() +
+  geom_col(mapping = aes(x = IDteam1, y = Gamepln1, fill = as.factor(Interest))) + 
+  theme_classic() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+#?geom_col()
+```
+
+**Comments**
+
+    - The correlation with interest in the team is heavily correlated with IDteam1( i consider myself a real fan) 
+    - It is odd to me though that there are people who rate a 4, and yet disagree and say they aren't real fans of the team. 
+
+**Questions**
+
+    - What group identifier is almost all season ticket holders?
+    
+    
+### Spending By Ticket Type
+```{r}
+med_spnd_type <- soccer %>% 
+  select(lasttype, spndsum) %>% 
+  drop_na() %>% 
+  group_by(lasttype) %>% 
+  summarise(med_spndsum = median(as.numeric(spndsum))) %>% 
+  ggplot(mapping = aes(x = lasttype, y = med_spndsum, fill = as.factor(lasttype))) +
+  geom_col() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+
+med_spnd_type
+#class(spndsum)
+#as.numeric(spndsum)
+#class(spndsum)
+#sum(spndsum, na.rm = TRUE)
+```
+**Comments** 
+
+    - Yep, season ticket holders on Median spend the most at games. 
+    
+**QUestions**
+
+    - Is there ways we can get season ticket holders and match holders to spend and attend more?
+
+### Ad Type By Loyalty, Check if the slicing is accurate
+```{r}
+
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_advertisements_loyalty <- soccer %>% 
+  select(Newspaper_Ad:WOMFam, Interest) %>% 
+  pivot_longer(cols = -c(Interest)) %>% 
+  group_by(Interest, name) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  group_by(Interest) %>% 
+  arrange(-value) %>%
+  slice(1)
+
+
+soccer_advertisements_loyalty %>% 
+  ggplot(mapping = aes(x = Interest, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+
+#should I maybe filter this by future type of attendance somehow?
+```
+**comments**
+
+    - Yes, so each interest type does have a prefered marketing method.
+    
+**QUestions**
+
+    - How should this be implimented to actually sell and attract more individuals?
+    
+# Detailed EDA Questions Raised in Base EDA 
+
+## Advertisement 
+
+### Ad by Age
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+groupedages <- c("10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80")
+
+
+Ad_Age <- soccer_advertisements_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(name), show.legend = FALSE)) +
+  geom_col(legend = "none") +
+    guides(color = "none", labels = "none") + 
+  coord_flip() + 
+  scale_fill_manual(values = cb_palette) + theme_classic() + labs(title = "Ticket Discounts and Email Ads", subtitle ="Email Ads for the majority of our respondents was the important ad type, \nfollowed closely by Ticket Discounts", x = "Age Groups", y = "Count of people influenced \nBy Ad Type") + theme(legend.position = "none") +
+  scale_x_continuous(breaks =seq(10, 70, by=10), labels = groupedages) +
+  theme(axis.text=element_text(size=14),
+        axis.title=element_text(size=14,face="bold")) +
+  
+  geom_text(data = data.frame(x = c(60.8562480112231, 21.146872130658 ),
+y = c(12.6343996692267, 25.1314555155355),
+label = c("", "Email Advertisement")),
+mapping = aes(x = x, y = y, label = label),
+vjust = 0.6, colour = "white", inherit.aes = FALSE) + 
+geom_text(data = data.frame(x = 30.5517243128971, y = 20.8072452121263, label = "Ticket Discount"),
+mapping = aes(x = x, y = y, label = label),
+hjust = 0.4, vjust = 0.6, colour = "white", inherit.aes = FALSE) + 
+geom_text(data = data.frame(x = c(50.6676581471308, 41.0015600709406 ),
+y = c(24.5678109953356, 25.1314555155355),
+label = c("Email Advertisement", "Email Advertisement")),
+mapping = aes(x = x, y = y, label = label),
+colour = "white", inherit.aes = FALSE)
+
+Ad_Age
+
+#ggannotate(Ad_Age)
+
+ggsave(filename = "AdPreferenceByAge.png", plot = Ad_Age)
+```
+
+**Comments**
+
+    - Ticket discount is the most popular for our main group of respondents
+    - HOwever, Email Ad does come in a close second with other groups, so those two combined are effective.
+    
+### Ad by Past Ticket
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_advertisements_ticket <- soccer %>% 
+  select(Newspaper_Ad:WOMFam, lasttype) %>% 
+  pivot_longer(cols = -c(lasttype)) %>% 
+  group_by(lasttype, name) %>% 
+  summarise(value = sum(value>=1, na.rm = TRUE)) %>% 
+  group_by(lasttype) %>% 
+  arrange(-value)%>%
+  slice(1)
+
+
+soccer_advertisements_ticket %>% 
+  ggplot(mapping = aes(x = lasttype, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+
+```
+
+**Comments**
+
+    - So perhaps we should be offering ticket discounts to non season holders, and email ads on sponsors or merch to season 
+    holders.
+    - Makes sense that season pass holders don't care about individual ticket discounts since they are only buying one ticket.
+    - THis is interesting in reflection that most of the respondents felt that the tickets were reasonably priced.
+    
+### Ad by viewership
+```{r, eval = TRUE}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_viewership <- soccer %>% 
+  select(Website:TVview) %>% 
+  select(-c(AttendAlone)) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value, na.rm = TRUE))
+
+v = "Facebook"
+
+get_biggest_ad <- function(v) {
+  looping <- soccer %>%
+filter(soccer[[v]] > 0) %>% 
+    select(Newspaper_Ad:WOMFam) %>% 
+    summarize(across(.fns = sum)) 
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(viewership_type = v, ad_type = loop2, count = max(vec))
+}
+
+#get_biggest_ad('Facebook')
+
+soccer_advertisements_viewership <- soccer_viewership$name %>%
+map_df(get_biggest_ad)
+
+
+
+viewership_ads <- soccer_advertisements_viewership %>% 
+  ggplot(mapping = aes(x = viewership_type, y = count, fill = as.factor(ad_type))) +
+  geom_col() +coord_flip() + scale_fill_manual(values = cb_palette) + theme_classic() + 
+  theme(legend.position="none") +
+  theme(axis.text=element_text(size=14),
+        axis.title=element_text(size=14,face="bold")) +
+  labs(title = "Top Ads On Viewing Platforms", subtitle = "Using ad feedback from platform users, and applying it across their \nviewing locations we found that Email and Ticket Discounts are still the best advertisement methods", y = "Sum of Positive Ratings \nFor Ad Type", x = "Platform Types") +
+  
+  geom_text(data = data.frame(x = c(3.02696751429402, 2.04531627641721, 6.01460171652779, 5.01161023434931, 4.0299589964725, 1.04232479423873 ),
+y = c(171.131901103497, 164.197628113787, 195.401856567481, 167.664764608642, 202.33612955719, 167.068850523589),
+label = c("Ticket Discount", "Ticket Discount", "Email Advertisement", "Ticket Discount", "Email Advertisement", "Ticket Discount")),
+mapping = aes(x = x, y = y, label = label),
+size = 4.23, colour = "white", inherit.aes = FALSE)
+
+
+viewership_ads
+
+#ggannotate(viewership_ads)
+
+ggsave(filename="AdsByViewership.png", plot = viewership_ads)
+```
+
+**Comments**
+
+    -This is really cool! It is so useful to see which ad works best for each platform. 
+    - This will be a part of one recommendation to help optimize ads, this could impact attendance, sales and even sponsors.
+    
+## Sponsorship
+
+### Sponsorship by age
+```{r}
+
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+
+soccer_sponsors_age <- soccer %>% 
+select(Spnbuy1:Spnbuy10, Age) %>%
+rename(Subaru = Spnbuy1, Microsoft = Spnbuy2, Pepsi = Spnbuy3, BECU = Spnbuy4, Chihuly = Spnbuy5, Hardrock = Spnbuy6, HealthWarrior = Spnbuy7, Hyatt = Spnbuy8, Kraken = Spnbuy9, Ruffneck = Spnbuy10) %>% 
+pivot_longer(cols = -c(Age)) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  group_by(age_group, name) %>% 
+  summarise(value = sum(value >= 5, na.rm = TRUE)) %>% 
+  arrange(-value)%>%
+  slice(1)
+  
+  
+soccer_sponsors_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() + 
+  scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - The largest age groups like Microsoft and Ruffneck most.
+    - using this in tangent with the optimized advertisement info is key. 
+    - This also shows where other sponsors are lacking, perhaps I can figure out how to optimize for them as well. 
+    
+### Sponsorship by Past Ticket
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF", "#3399FF")
+
+soccer_sponsors_ticket <- soccer %>% 
+select(Spnbuy1:Spnbuy10, lasttype) %>%
+rename(Subaru = Spnbuy1, Microsoft = Spnbuy2, Pepsi = Spnbuy3, BECU = Spnbuy4, Chihuly = Spnbuy5, Hardrock = Spnbuy6, HealthWarrior = Spnbuy7, Hyatt = Spnbuy8, Kraken = Spnbuy9, Ruffneck = Spnbuy10) %>% 
+pivot_longer(cols = -c(lasttype)) %>% 
+  group_by(lasttype, name) %>% 
+  summarise(value = sum(value >= 5, na.rm = TRUE)) %>% 
+  arrange(-value)%>%
+  slice(1:2)
+  
+  
+sponsors_pticket <- soccer_sponsors_ticket %>% 
+  ggplot(mapping = aes(x = lasttype, y = value, fill = as.factor(name))) +
+  geom_col(position = "dodge") +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic() +
+  
+  geom_text(data = data.frame(x = c(1.21610598443295, 1.80960351697005, 2.22410973017056, 0.801599771232434),
+y = c(16.0508945529791, 15.1671853544976, 13.1051972247073, 16.0508945529791),
+label = c("Ruffneck", "Microsoft", "Ruffneck", "Microsoft")),
+mapping = aes(x = x, y = y, label = label),
+size = 4.23, colour = "White", inherit.aes = FALSE)
+
+sponsors_pticket
+
+#ggannotate(sponsors_pticket)
+
+
+ggsave(filename = "SponsorPrefByTicket.png", plot = sponsors_pticket)
+```
+**comments**
+
+    - good to verify but not surprising that the most popular sponsors are the same between ticket type and age.
+
+```{r}
+write.csv(soccer_sponsors_ticket,"C:\\Users\\jorda\\OneDrive\\Documents\\5210R\\Tenth Week\\soccer_sponsors_ticket.csv", row.names = FALSE)
+
+```
+**Comments**
+
+    - Ruffneck is the most popular sponsor with our season ticket holders. However, for match pack buyers Microsoft is the        most popular.
+    
+### Sponsorship by Viewership
+```{r, eval = TRUE}
+soccer_viewership <- soccer %>% 
+  select(Website:TVview) %>% 
+  select(-c(AttendAlone)) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value, na.rm = TRUE))
+
+#v = "Facebook"
+
+get_biggest_sponsor <- function(v) {
+  looping <- soccer %>%
+filter(soccer[[v]] > 0) %>% 
+    select(Spnbuy1:Spnbuy10) %>%
+    rename(Subaru = Spnbuy1, Microsoft = Spnbuy2, Pepsi = Spnbuy3, BECU = Spnbuy4, Chihuly = Spnbuy5, Hardrock = Spnbuy6, HealthWarrior = Spnbuy7, Hyatt = Spnbuy8, Kraken = Spnbuy9, Ruffneck = Spnbuy10) %>% 
+    summarize(across(.fns = function(x) sum(x, na.rm = TRUE)))  
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(viewership_type = v, merch_type = loop2, count = max(vec))
+}
+
+#get_biggest_sponsor('Subaru')
+
+soccer_sponsor_viewership <- soccer_viewership$name %>%
+map_df(get_biggest_sponsor)
+
+
+
+soccer_sponsor_viewership %>% 
+  ggplot(mapping = aes(x = viewership_type, y = count, fill = as.factor(merch_type))) +
+  geom_col() +coord_flip() + scale_fill_manual(values = cb_palette) + theme_classic()
+
+```
+
+**Comments**
+
+    - same across the board, not the most useful for advice giving, but it does go to show how the other sponsors will need 
+    some optimization to gain ground.
+    
+### Best Sponsorship by Ad:
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_advertisements <- soccer %>% 
+  select(Newspaper_Ad:WOMFam) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value == 3, na.rm = TRUE))
+
+
+
+get_biggest_sponsor2 <- function(v) {
+  looping <- soccer %>%
+filter(soccer[[v]] > 0) %>% 
+    select(Spnbuy1:Spnbuy10) %>%
+    rename(Subaru = Spnbuy1, Microsoft = Spnbuy2, Pepsi = Spnbuy3, BECU = Spnbuy4, Chihuly = Spnbuy5, Hardrock = Spnbuy6, HealthWarrior = Spnbuy7, Hyatt = Spnbuy8, Kraken = Spnbuy9, Ruffneck = Spnbuy10) %>% 
+    summarize(across(.fns = function(x) sum(x, na.rm = TRUE)))  
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(ad_type = v, sponsor_type = loop2, count = max(vec))
+}
+
+#get_biggest_sponsor2(WOMFAM)
+
+soccer_sponsor_ads <- soccer_advertisements$name %>%
+map_df(get_biggest_sponsor2)
+
+
+
+sponsors_ads <- soccer_sponsor_ads %>% 
+  ggplot(mapping = aes(x = ad_type, y = count, fill = as.factor(sponsor_type))) +
+  geom_col() +coord_flip() + scale_fill_manual(values = cb_palette) + theme_classic() + labs(title = "Top Ads On Viewing Platforms", subtitle = "Using ad feedback from platform users, and applying it across their \nviewing locations we found that Email and Ticket Discounts are still the best advertisement methods", x = "Sum of Positive Ratings", y = "platform types")
+
+sponsors_ads
+
+ggsave(filename="AdsBysponsors.png", plot = sponsors_ads)
+
+```
+
+**comments**
+
+    - Same as above, not too surprising, just double checking. 
+    
+## Interest
+###Interest By Age
+#Is this correct or should it be median?
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_Interest_age <- soccer %>% 
+select(Interest, Age) %>%
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  group_by(age_group, Interest) %>% 
+  summarise(value = (sum(Interest>3, na.rm = TRUE))) %>% 
+  arrange(-value)%>%
+  slice(1)
+  
+  
+  
+Age_group_interest <- soccer_Interest_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = "#66CCCC")) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic() + labs(title = "30-50 Year Olds Are Our Most Loyal Group", y = "Count of Fans", x = "Age Groups") +
+  theme(legend.position = "none")
+
+Age_group_interest
+
+ggsave(filename = "CountOfInterestAgeGroups.png", plot = Age_group_interest)
+```
+
+**Comments**
+
+    - Good to see the age groups distributed by total interest and loyalty. This is not a median measurement, but should help
+    with marketing demographics.
+    
+### Interest by past Ticket
+I want this to be separate columns, why not working?
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_Interest_pticket <- soccer %>% 
+  select(Interest, lasttype) %>% 
+  filter(lasttype == c(1,2)) %>% 
+  group_by(lasttype, Interest) %>% 
+  summarise(Int_points = sum(as.numeric(Interest)))
+
+soccer_Interest_pticket %>% 
+  ggplot(mapping = aes(x = Interest, y = Int_points, fill = as.factor(lasttype))) +
+  geom_col() +coord_flip() + 
+  scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - Interest levels are not dictate by one type of ticket
+    
+### Interest by viewership
+fix this I want the top viewership platform per interest group
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+
+soccer_Interest_viewership <- soccer %>% 
+  select(Website:TVview, Interest) %>% 
+  select(-c(AttendAlone, Instagram)) %>% 
+  pivot_longer(cols = -c(Interest)) %>% 
+  group_by(name, Interest) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>%
+  group_by(Interest) %>% 
+  arrange(-value) %>%
+  slice(1)
+
+soccer_Interest_viewership %>% 
+  ggplot(mapping = aes(x = as.factor(Interest), y = value, fill = as.factor(name))) +
+  geom_col(position = "dodge") +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic() + labs(title = "Our Bigest Viewership Is On TV & Twitter", subtitle = "For the top 2 most interested ranking the largest viewership is from Twitter, who checks their feed almost 1,200 times a week", x = "Interest Ranking", y = "Interest Ranking") #+ theme(legend.position = "none")
+
+ggsave(filename = "ViewershipByInterest.png", plot = Age_group_interest)
+```
+
+**Comments**
+
+    - Again, viewerships are as expected.
+    
+### Viewership BY interest, switched.
+This is weird but super interesting
+```{r}
+
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF")
+
+soccer_Interest_viewership <- soccer %>% 
+  select(Website:TVview, Interest) %>% 
+  select(-c(AttendAlone)) %>% 
+  filter(Interest == c(3,4,5)) %>% 
+  pivot_longer(cols = -c(Interest)) %>% 
+  group_by(name, Interest) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  arrange(-value) #%>%
+  #slice(1)
+
+Categorey_Viewership_Interest <- soccer_Interest_viewership %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(Interest))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic() + theme(legend.position = "none") +
+  labs(title ="Our TV Viewers Are Our Largest Group of Loyal Fans", subtitle="TV Viewers are also attending our games and purchasing merch", x = "Viewership Platform", y = "Count of Fans") +
+  
+  geom_text(data = data.frame(x = c(3.09333116547266, 3.07502154362995, 3.07502154362995),
+y = c(373.671100880848, 177.617048446934, 25.9312796342879),
+label = c("Live and Die Fan", "Loyal Fan", "Moderate \nFan")),
+mapping = aes(x = x, y = y, label = label),
+colour = "white", inherit.aes = FALSE)
+
+
+#ggannotate(Categorey_Viewership_Interest)
+
+Categorey_Viewership_Interest
+
+ggsave(filename = "InterestInEachViewership.png", plot = Categorey_Viewership_Interest)
+```
+**comments**
+
+    - Very useful! Great display of who is where and why for each. I think I will keep the proportions stacked as it is a good eye catching visualizer
+
+### Interest by  strongest IDtype
+How do I get this to format in the direction that I want it to?
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF") 
+
+soccer_Interest_IDtype <- soccer %>% 
+  select(IDteam1:Skill2, Interest) %>%
+  select(-c(IDsport1, IDteam1, IDnattm1)) %>%
+  rename(Player_Fan = IDplay1, Coach_Fan = IDcoach1, Hope_Fan = HopeS1, Community_Fan = IDcomm2, Knowledge_Fan = Knowledg3, Escape_Fan = Escape1, Skill_Fan = Skill2) %>% 
+  pivot_longer(cols = -c(Interest)) %>% 
+  group_by(name, Interest) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  group_by(Interest) %>% 
+  arrange(-value)%>%
+  slice(0:2)
+
+
+Interest_Factors <- soccer_Interest_IDtype %>% 
+  ggplot(mapping = aes(x = Interest, y = value, fill = as.factor(name))) +
+  geom_col(position = "dodge") +coord_flip() + theme_classic() +
+  theme(legend.position = "none") + 
+  labs(title = "Fans Are Really Fond of The Coach", subtitle = "The respondents ranked the different factors about the team that make them Interested in the \nteam. Top 3 were the skill of the players, the coach and the opportunity to escape life for a while") +
+  scale_fill_manual(values = cb_palette) +
+  
+  geom_text(data = data.frame(x = c(3.79466282147335, 4.81503627683303, 5.2231856589769, 3.25664772682916, 4.23991669290303, 2.79284161075658 ),
+y = c(95.0546205435977, 83.9779915489319, 96.900725376042, 113.515668868041, 104.285144705819, 98.1122316723336),
+label = c("Coach Laura ", "Coach Laura ", "Skill Of The Game", "Skill Of The Game", "Skill Of The Game", "Escape Stress")),
+mapping = aes(x = x, y = y, label = label),
+colour = "White", inherit.aes = FALSE)
+
+
+Interest_Factors
+#ggannotate(Interest_Factors)
+
+ggsave(filename = "InterestFactorsPerLevel.png", plot = Interest_Factors)
+```
+
+**Comments**
+
+    - looking to find what the strongest Identifier is for each fo the interst groups
+    - Will use this in recommendations
+    
+    
+### Interest by IDtype
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_Interest_IDtype <- soccer %>% 
+  select(IDteam1:Skill2, Interest) %>% 
+  rename(Real_Fan = IDteam1, Player_Fan = IDplay1, Coach_Fan = IDcoach1, Hope_Fan = HopeS1, Womens_Fan = IDsport1, Community_Fan = IDcomm2, Knowledge_Fan = Knowledg3, Escape_Fan = Escape1, Skill_Fan = Skill2) %>% 
+  pivot_longer(cols = -c(Interest)) %>% 
+  group_by(name, Interest) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  arrange(-value)%>%
+  slice(1)
+
+
+soccer_Interest_IDtype %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(Interest))) +
+  geom_col() +coord_flip() + 
+  scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - So the strongest Identifier is Womens_fan, there are other identifiers that will be useful.
+    
+## Future Attendance(Gamepln1)
+### Attendance by Age
+This looks good I think, what is the fill doing?
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999") 
+
+soccer_FutAt_age <- soccer %>% 
+select(Gamepln1, Age) %>%
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  group_by(age_group, Gamepln1) %>% 
+  summarise(value = (median(Gamepln1, na.rm = TRUE))) %>% 
+  arrange(-value)%>%
+  slice(1)
+  
+  
+  
+soccer_FutAt_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(Gamepln1))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - 40-50 year olds intend to go to the most games
+    - The distribution is very interesting.
+    
+### Attendance by past ticket
+I want to see each of these ticket types used and basically compare the amount of games that they want to go to
+```{r}
+soccer_FutAt_last <- soccer %>% 
+select(Gamepln1, lasttype) %>%
+  group_by(lasttype) %>% 
+  summarise(value = (median(Gamepln1, na.rm = TRUE)))
+
+  
+  
+  
+soccer_FutAt_last %>% 
+  ggplot(mapping = aes(x = lasttype, y = value)) +
+  geom_col() +coord_flip() + theme_classic()
+```
+
+**Comments**
+
+    - This is very simple, but it shows that season ticket holders do intend to go to more games.
+    
+### Attendance by each viewership
+is this really giving me the summed amount of attendances from each of these viewerships?
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999", "#666699") 
+
+soccer_FutAt_viewership <- soccer %>% 
+  select(Website:TVview, Gamepln1) %>% 
+  select(-c(AttendAlone)) %>% 
+  pivot_longer(cols = -c(Gamepln1)) %>% 
+  group_by(name, Gamepln1) %>% 
+  summarise(value = sum(value, na.rm = TRUE)) %>% 
+  arrange(-value) %>%
+  slice(1)
+
+gamepln1_viewership <- soccer_FutAt_viewership %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = name)) +
+  geom_col() +coord_flip() + 
+  scale_fill_manual(values = cb_palette) + theme_classic() +
+  theme(legend.position = "none") +
+  theme(axis.ticks = element_blank(), axis.text.y = element_blank()) +
+  labs(title = "Twitter Users Love Matches", subtitle = "Twitter users were found to have the greatest number of \ngames they planned on attend when asked about next season.", y = "Planned Attendance", x = "Viewership Platforms") +
+  
+  
+  geom_text(data = data.frame(x = c(3.02696751429402, 2.04531627641721, 6.05728220513113, 4.00861875217083, 5.03295047865098, 1.02098454993706 ),
+y = c(30.8529424864301, 29.8344235890725, 27.7973857943574, 24.7418291022846, 34.4177586271816, 29.6593656535892),
+label = c("TV Viewer", "Instagram", "YouTube", "Twitter", "Team Website", "Facebook" )),
+mapping = aes(x = x, y = y, label = label),
+size = 4.59, colour = "White", inherit.aes = FALSE)
+
+
+#do ggannotate to get rid of labels on y axis
+
+#ggannotate(gamepln1_viewership)
+gamepln1_viewership
+
+
+ggsave(filename = "FutureAttendanceViewership.png", plot = gamepln1_viewership)
+```
+
+**Comments**
+
+    - It looks like twitter users have the most intent of going to the most games
+    - Super useful, will use this in recommendations
+    
+```{r}
+write.csv(soccer_FutAt_viewership,"C:\\Users\\jorda\\OneDrive\\Documents\\5210R\\Tenth Week\\soccer_FutAt_viewership.csv", row.names = FALSE)
+
+```
+    
+### Attendance by Future Type
+```{r, eval=TRUE}
+soccer_advertisements <- soccer %>% 
+  select(Newspaper_Ad:WOMFam) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value == 3, na.rm = TRUE))
+
+#v = "Facebook"
+
+get_biggest_Merchad <- function(v) {
+  looping <- soccer %>%
+filter(soccer[[v]] > 0) %>% 
+    select(Buymer1:BuySpon1) %>%
+select(-c(Buymer1)) %>% 
+ rename(Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, Pref_sponsor = BuySpon1) %>% 
+    summarize(across(.fns = function(x) sum(x, na.rm = TRUE)))  
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(ad_type = v, merch_type = loop2, count = max(vec))
+}
+
+
+
+soccer_merch_ad <- soccer_advertisements$name %>%
+map_df(get_biggest_Merchad)
+
+
+
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+
+soccer_merch_ad %>% 
+  ggplot(mapping = aes(x = ad_type, y = count, fill = as.factor(merch_type))) +
+  geom_col() +coord_flip() + scale_fill_manual(values = cb_palette) + theme_classic()
+
+```
+
+**Comments**
+
+    - Interesting to see how each preferd ad type impacts the desire for purchases at the match.
+    - Not to useful though
+    
+    
+### Attendance by advertisement (Gamepln1):
+Fix This
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999", "#666699") 
+
+soccer_futureAT_advertisement <- soccer %>% 
+  select(Newspaper_Ad:WOMFam, Gamepln1) %>% 
+  select(-c(WOMFriends, Facebk_Ad, WOMFam, Postmtch_Event, Prematch_Event, Internet_Ad, Twitter_Ad, Theme_Night_Ad, Billboard_Ad)) %>% 
+  pivot_longer(cols = -c(Gamepln1)) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(Gamepln1 * value, na.rm = TRUE)) 
+
+
+FutureAT_Ad <- soccer_futureAT_advertisement %>% 
+  ggplot(mapping = aes(x = reorder(name, value), y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() + labs(title = "Attendance Plans Are Highest with Ticket Discount", subtitle = "Of our respondents feed back on what advertisements they felt were most enticing \nit also became clear that those who valued Ticket Discount Advertisements planned on coming to the most games", x= "Advertisement Type", y = "Number of games intending to go to" ) + scale_fill_manual(values = cb_palette) + theme_classic() + theme(legend.position = "none") + 
+  
+geom_text(data = data.frame(x = c(2.98428702569068, 2.00263578781387, 3.98727850786916, 0.999644305635395),
+  y = c(937.767541195169, 1045.71007309826, 732.676730579306, 905.384781624243),
+  label = c("Radio Ads", "Halftime Events Ads", "General Media Ads", "News Paper Ads" )),
+  mapping = aes(x = x, y = y, label = label),
+  size = 4.23, hjust = 0.45, vjust = 0.35, colour = "white", inherit.aes = FALSE) + 
+
+geom_text(data = data.frame(x = 6.03594196082946, y = 779.564267874709, label = "Ticket Dicount Ads"),
+  mapping = aes(x = x, y = y, label = label),
+  size = 4.23, colour = "white", inherit.aes = FALSE) + 
+
+geom_text(data = data.frame(x = 5.05429072295265, y = 973.860825300264, label = "Emailed Ads"),
+  mapping = aes(x = x, y = y, label = label),
+  size = 4.23, hjust = 0.45, vjust = 0.45, colour = "white", inherit.aes = FALSE) +
+  
+  geom_rect(data = data.frame(xmin = 0.50346441477488, xmax = 3.4373762568274, ymin = -11.402543426352, ymax = 4615.7944865019),
+mapping = aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+size = 0L, colour = "black", fill = "light blue", alpha = 0.25, inherit.aes = FALSE) + 
+geom_text(data = data.frame(x = 1.88537941284372, y = 3475.50047357766, label = "These are the least efficient ad types, \nmay be ideal to not use one or multiple, \nand use a more efficient ad instead"),
+mapping = aes(x = x, y = y, label = label),
+size = 4.59, inherit.aes = FALSE)
+
+
+
+#ggannotate(FutureAT_Ad)
+
+FutureAT_Ad
+
+ggsave(filename = "FutureAttendanceByAd.png", plot = FutureAT_Ad)
+```
+**Comments**
+
+    - The bottom three are sorted out as the ad types that do the worst when it comes to enticing individuals to go to games.
+    - This is very useful for show on what to use and not use. Want to use this in recs.
+    
+```{r}
+
+write.csv(soccer_futureAT_advertisement,"C:\\Users\\jorda\\OneDrive\\Documents\\5210R\\Tenth Week\\soccer_futureAT_advertisement.csv", row.names = FALSE)
+
+```
+## Desire for Merchandise
+### Merch by Age
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF")
+
+soccer_merch_age <- soccer %>% 
+select(Buymer1:BuySpon1, Age) %>%
+ rename(Wants_Merch = Buymer1, Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, 
+         Pref_Sponser = BuySpon1) %>% 
+          pivot_longer(cols = -c(Age)) %>% 
+          mutate(age_group = floor((Age-1)/10)*10) %>% 
+          group_by(age_group, name) %>% 
+          summarise(value = sum(value >= 1, na.rm = TRUE)) %>% 
+          arrange(-value)%>%
+          slice(1)
+  
+  
+soccer_merch_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - Surprising that 20-30 has such a large demand for merch
+    
+### Merch type preference by Age
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF")
+soccer_merch_age <- soccer %>% 
+select(Buymer1:BuySpon1, Age) %>%
+select(-c(Buymer1)) %>% 
+ rename(Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, 
+         Pref_Sponser = BuySpon1) %>% 
+          pivot_longer(cols = -c(Age)) %>% 
+          mutate(age_group = floor((Age-1)/10)*10) %>% 
+          group_by(age_group, name) %>% 
+          summarise(value = sum(value >= 1, na.rm = TRUE)) %>% 
+          arrange(-value)%>%
+          slice(1)
+  
+  
+soccer_merch_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+
+```
+
+**Comments**
+
+    - Surprising that 20-30 has such a large demand for merch
+    
+### Merch by past ticket
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+soccer_merch_pticket <- soccer %>% 
+select(Buymer1:BuySpon1, lasttype) %>%
+select(-c(Buymer1)) %>% 
+ rename(Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, 
+         Pref_Sponser = BuySpon1) %>% 
+          pivot_longer(cols = -c(lasttype)) %>% 
+          group_by(lasttype, name) %>% 
+          summarise(value = sum(value >= 1, na.rm = TRUE)) %>% 
+          arrange(-value)%>%
+          slice(1)
+  
+  
+soccer_merch_pticket %>% 
+  ggplot(mapping = aes(x = lasttype, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - Those that are season ticket holders prefer the sponsors over anything else, perhaps because of the exposure?
+    - and then match ticket holders prefer to buy when they do go to the match (though it may only be a few times a season)
+    
+### Merch by viewership
+```{r, eval=TRUE}
+
+
+cb_palette <- c("#66CCCC") #3399FF", "#6600FF", "#000099", "#999999")
+  
+soccer_viewership <- soccer %>% 
+  select(Website:TVview) %>% 
+  select(-c(AttendAlone)) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value, na.rm = TRUE))
+
+#v = "Facebook"
+
+get_biggest_merch <- function(v) {
+  looping <- soccer %>%
+filter(soccer[[v]] > 0) %>% 
+    select(Buymer1:BuySpon1) %>%
+select(-c(Buymer1)) %>% 
+ rename(Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, 
+         Pref_Sponser = BuySpon1) %>%  
+    summarize(across(.fns = function(x) sum(x, na.rm = TRUE))) 
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(merch_type = v, ad_type = loop2, count = max(vec))
+}
+
+get_biggest_merch('Facebook')
+
+soccer_merch_viewership <- soccer_viewership$name %>%
+map_df(get_biggest_merch)
+
+
+
+soccer_merch_viewership %>% 
+  ggplot(mapping = aes(x = merch_type, y = count, fill = as.factor(ad_type))) +
+  geom_col() +coord_flip() + scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - Wasn't expecting this, but it is good to know that all viewership types are favorable towards the sponsors.
+
+### Merch by viewership
+```{r, eval=TRUE}
+
+
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+  
+soccer_viewership <- soccer %>% 
+  select(Website:TVview) %>% 
+  select(-c(AttendAlone)) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value, na.rm = TRUE))
+
+#v = "Facebook"
+
+get_biggest_merch <- function(v) {
+  looping <- soccer %>%
+filter(soccer[[v]] > 0) %>% 
+    select(Buymer1:BuySpon1) %>%
+select(-c(Buymer1, BuySpon1)) %>% 
+ rename(Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, 
+         ) %>%  
+    summarize(across(.fns = function(x) sum(x, na.rm = TRUE))) 
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(merch_type = v, ad_type = loop2, count = max(vec))
+}
+
+#get_biggest_merch('Facebook')
+
+soccer_merch_viewership <- soccer_viewership$name %>%
+map_df(get_biggest_merch)
+
+
+
+soccer_merch_viewership %>% 
+  ggplot(mapping = aes(x = merch_type, y = count, fill = as.factor(ad_type))) +
+  geom_col() +coord_flip() + scale_fill_manual(values = cb_palette) + theme_classic()
+```
+**Comments**
+
+    - This is super interesting! So twitter users do prefer online stores, but all other users prefer match merch offerings!
+    
+### Merch by advert preference
+```{r, eval=TRUE}
+soccer_advertisements <- soccer %>% 
+  select(Newspaper_Ad:WOMFam) %>% 
+  pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value == 3, na.rm = TRUE))
+
+#v = "Facebook"
+
+get_biggest_Merchad <- function(v) {
+  looping <- soccer %>%
+filter(soccer[[v]] > 0) %>% 
+    select(Buymer1:BuySpon1) %>%
+select(-c(Buymer1)) %>% 
+ rename(Pref_Online = Buyonl1, Prefer_Match = BuyMat1, Prefer_Store = BuyStor1, Pref_sponsor = BuySpon1) %>% 
+    summarize(across(.fns = function(x) sum(x, na.rm = TRUE)))  
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(ad_type = v, merch_type = loop2, count = max(vec))
+}
+
+
+
+soccer_merch_ad <- soccer_advertisements$name %>%
+map_df(get_biggest_Merchad)
+
+
+
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+
+soccer_merch_ad %>% 
+  ggplot(mapping = aes(x = ad_type, y = count, fill = as.factor(merch_type))) +
+  geom_col() +coord_flip() + scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - So when sponsor isnt an option all ad type users prefer match offered merch
+    - However when it comes to things like electric adverts, everyone is very pleased with the sponsors. 
+    - Recommendation option: Make sure on electronic ads to mention sponsors, and give access to sponsor merch.
+    
+## Match Day Satisfaction(Matchsat)
+### Satisfaction by pleased Food stuff
+what was the average satisfaction level of everyone that voted 4 or more on food for each categorey?
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999", "#666699") 
+
+
+soccer_food <- soccer_og %>% 
+  select(Consat3:Consat5, Matchsat) %>%  
+  select(-c(Beersat1, Consat2)) %>% 
+  rename(General_Options = Consat3, Prices_Food = Consat4, Quality = Consat1, Wait_Food = Consat9, Wait_Drink = Consat6, Conven_Food_Loc = Consat8, Courteous = Prsnsat4, Prices_Drink = Consat5 )
+
+soccer_food[soccer_food == "Very Dissatisfied"] <- 2
+soccer_food[soccer_food == "Dissatisfied"] <- 3
+soccer_food[soccer_food == "Neutral"] <- 4
+soccer_food[soccer_food == "Satisfied"] <- 5
+soccer_food[soccer_food == "Very Satisfied"] <- 6
+
+soccer_sat_pfood <- soccer_food %>% 
+  select(-c(Wait_Drink, General_Options)) %>%
+  select(Prices_Food:Matchsat) %>% 
+  pivot_longer(cols = -c(Matchsat)) %>% 
+  group_by(name) %>% 
+  filter(value >= 4) %>% 
+  drop_na() %>%
+  group_by(name) %>% 
+  mutate(value = sum(as.numeric(Matchsat)>=5)) %>% 
+  arrange(name) %>% 
+    slice(1)
+  
+satisfaction_variables <- soccer_sat_pfood %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() + theme_classic() + theme(legend.position = "none") +
+  scale_fill_manual(values = cb_palette) +
+  theme(axis.ticks = element_blank(), axis.text.y = element_blank()) +
+  
+  
+geom_text(data = data.frame(x = c(3.03840229994452, 2.0130634767526, 6.02287066030673, 4.00881225760831, 5.03415108080023, 1.06096314093152 ),
+y = c(130.692285923528, 123.829802528735, 125.790512070105, 130.692285923528, 132.652995464897, 173.49089888123),
+label = c("Price of Drink", "Polite Staff", "Wait For Food", "Price of Food", "Quality Of Food", "Convenience Of Food Location")),
+mapping = aes(x = x, y = y, label = label),
+size = 4.23, colour = "white", inherit.aes = FALSE) +
+  
+labs(title = "Our Respondents Are Very Pleased With Accomadations", x = "Accomadation Type", y = "Count of Respondents Satisfied")
+
+satisfaction_variables
+
+#ggannotate(satisfaction_variables)
+
+ggsave(filename = "SatisfactionVariables.png", plot = satisfaction_variables)
+
+```
+
+**Comments**
+
+    - satisfaction levels are all pretty much the same but the inverse of this could be useful for giving advise on what to 
+    improve.
+    
+### Satisfied by disatisfied food stuff
+```{r}
+soccer_sat_dfood <- soccer_food %>% 
+  select(General_Options:Matchsat) %>% 
+  pivot_longer(cols = -c(Matchsat)) %>% 
+  group_by(name) %>% 
+  filter(value <= 3) %>% 
+  drop_na() %>%
+  group_by(name) %>% 
+  mutate(value = sum(as.numeric(Matchsat)<= 4)) %>% 
+  arrange(name) %>% 
+    slice(1)
+  
+soccer_sat_dfood %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = name)) +
+  geom_col() +coord_flip() + theme_classic()#+
+  #scale_fill_manual(values = cb_palette)
+
+
+
+
+```
+ 
+**Comments**
+
+    - It seems that even being disatisfied with the food stuff had little impact on satisfaction of the match day.
+    
+### Satisfaction by lasttype
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF")
+
+soccer_sat_pticket <- soccer %>% 
+  select(Matchsat, lasttype) %>%
+  group_by(lasttype) %>% 
+  summarise(value = mean(as.numeric(Matchsat) >=4, na.rm = TRUE))
+
+soccer_sat_pticket %>% 
+  ggplot(mapping = aes(x = lasttype, y = value, fill = as.factor(lasttype))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+
+```
+
+**Comments**
+
+    - satisfaction does seem to be ever slightly higher for season ticket holders
+    
+### Satisfaction by viewership
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999", "#666699") 
+
+soccer_sat_viewership <- soccer %>% 
+  select(Website:TVview, Matchsat) %>% 
+  select(-c(AttendAlone)) %>% 
+  pivot_longer(cols = -c(Matchsat)) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(as.numeric(Matchsat) >= 4, na.rm = TRUE))
+
+soccer_sat_viewership %>% 
+  ggplot(mapping = aes(x = name, y = value, fill = as.factor(name))) +
+  geom_col() +coord_flip() +
+  scale_fill_manual(values = cb_palette) + theme_classic()
+```
+
+**Comments**
+
+    - Satisfactionw with the match is the same across all viewing platforms, not very useful
+    
+### Satisfaction by Age
+```{r}
+cb_palette <- c("#66CCCC", "#3399FF", "#6600FF", "#000099", "#999999")
+
+soccer_sat_age <- soccer %>% 
+select(Matchsat, Age) %>%
+  pivot_longer(cols = -c(Age)) %>% 
+  mutate(age_group = floor((Age-1)/10)*10) %>% 
+  group_by(age_group, name) %>% 
+  summarise(value = mean(as.numeric(value), na.rm = TRUE))
+  
+  
+soccer_sat_age %>% 
+  ggplot(mapping = aes(x = age_group, y = value, fill = as.factor(age_group))) +
+  geom_col() +coord_flip() + theme_classic()#+
+  #scale_fill_manual(values = cb_palette)
+```
+
+**Comments**
+
+    - Satisfaction is the same acorss the age groups
+
+    
+# Statistical EDA:
+## Univariate Regression
+```{r, eval=FALSE}
+#fix and add the proper independent variables
+soccer <- soccer %>% 
+  drop_na()
+```
+
+```{r}
+Matchimpression <- lm(formula = Matchsat ~ Interest, data = soccer)
+
+summary(Matchimpression)
+# this is saying a 1 unit in interest is equal to a .2 increase in match satisfaction
+```
+
+```{r}
+library(AER)
+Matchimpression <- lm(formula = Matchsat ~ as.factor(Interest), data = soccer)
+
+summary(Matchimpression)
+# 5 levels of interest, one of them has been ommited. everything is relative to the omit which is level 1.
+#the intercept is 4.0 saying if you have an interest level of 1 then matsat will be 4
+#Those with an interest level of 2 have an increase o 1.55 from the reference level of interest of 1. 
+
+linearHypothesis(Matchimpression, 'as.factor(Interest)5 = as.factor(Interest)2')
+
+```
+
+**Comments**
+
+    - Those with 5 Interest are likely to be ranked 2 more steps higher on match day satisfaction
+
+```{r}
+Past_attendance_Age <- lm(formula = lasttype ~ Age, data = soccer)
+
+summary(Past_attendance_Age)
+```
+**Comments**
+
+    - Age isn't a big impact or determinate for previous ticket types.
+    
+```{r}
+#Future_attendance <- lm(formula = Interest ~ , data = soccer)
+
+```
+
+```{r}
+#Future_Merch <- lm(formula = Buymer1 ~ , data = soccer)
+
+```
+
+```{r}
+#Season2016_Satisfaction <- lm(formula = Posaff1 ~ , data = soccer)
+
+```
+
+```{r}
+#Sponsorship_Favor <- lm(formula = Pref_sponser ~ , data = soccer_merch_services)
+
+```
+
+```{r}
+#Viwership_Types_twitter <- lm(formula = Twitter ~ , data = soccer_viewership)
+
+#Viwership_Types_TVview <- lm(formula = TVview ~ , data = soccer_viewership)
+```
+
+```{r}
+#summary()
+```
+
+
+
+## Multiple Regression: These are too hard to create and interpret in this data set, will not use.
+```{r}
+
+
+
+```
+
+# Sponsorship Focus:.
+### Best Ad for each sponsorship: 
+```{r}
+cb_palette <- c("#66CCCC", "#6600FF", "#3399FF")
+
+soccer <- soccer %>% 
+  rename(Subaru = Spnbuy1, Microsoft = Spnbuy2, Pepsi = Spnbuy3, BECU = Spnbuy4, Chihuly = Spnbuy5, Hardrock = Spnbuy6, HealthWarrior = Spnbuy7, Hyatt = Spnbuy8, Kraken = Spnbuy9, Ruffneck = Spnbuy10)
+#vtable(soccer_special)
+
+soccer_Sponsors <- soccer %>% 
+select(Subaru:Ruffneck) %>% 
+pivot_longer(cols = everything()) %>% 
+  group_by(name) %>% 
+  summarise(value = sum(value >= 5, na.rm = TRUE))
+
+#vtable(soccer_special)
+
+
+get_biggest_sponsor3 <- function(v) {
+  looping <- soccer %>% 
+filter(soccer[[v]] > 5) %>% 
+    select(Newspaper_Ad:WOMFam) %>%
+    summarize(across(.fns = function(x) sum(x, na.rm = TRUE)))  
+vec <- as.numeric(looping)
+loop2 <- names(looping)[which(vec == max(vec))] %>% 
+  paste(collapse = ',')
+
+tibble(sponsor_type1 = v, ad_type1 = loop2, count = max(vec))
+}
+
+
+
+#get_biggest_sponsor3('BECU')
+
+soccer_sponsorbest_ads <- soccer_Sponsors$name %>%
+map_df(get_biggest_sponsor3)
+
+
+
+sponsors_ads <- soccer_sponsorbest_ads %>% 
+  ggplot(mapping = aes(x = sponsor_type1, y = count, fill = as.factor(ad_type1))) +
+  geom_col() +coord_flip() + 
+  scale_fill_manual(values = cb_palette, name = "Ad Types", labels = c("Email Advertisement", "Ticket Discount and Email", "Ticket Discount")) +
+  theme_classic() + labs(title = "Top Ads For Sponsors", subtitle = "Using ad feedback from platform users, and applying it across \nSponsor info we found that Email and Ticket Discounts are still the best advertisement methods", y = "Sum of Positive Ratings", x = "Sponsors") +
+  
+  geom_text(data = data.frame(x = c(5.03775856011167, 9.04008695914096, 9.98800684312158, 1.03543016108237, 3.03659436059702, 1.98335004506299 ),
+y = c(46.6064089059255, 64.156318189664, 62.7327514036573, 62.020968010654, 44.9381665785739, 51.344217115604),
+label = c("Email Advertisement", "Ticket Discount Advertisement", "Ticket Discount Advertisement", "Ticket Discount Advertisement", "Email Advertisement", "Email and Ticket Discount" )),
+mapping = aes(x = x, y = y, label = label), size=4.23, 
+hjust = 0.45, colour = "White", inherit.aes = FALSE) + 
+geom_text(data = data.frame(x = c(8.09216707516034, 7.07403090347745, 4.08983867613104, 6.05589473179456),
+y = c(51.5888926569488, 51.5888926569488, 48.4970835435906, 50.1653258709422),
+label = c("Email Advertisement", "Email Advertisement", "Email Advertisement", "Email Advertisement" )),
+mapping = aes(x = x, y = y, label = label),
+colour = "White", inherit.aes = FALSE)
+
+
+sponsors_ads
+
+#ggannotate(sponsors_ads)
+
+ggsave(filename="AdsBysponsors.png", plot = sponsors_ads)
+
+```
+
+
+**Comments**
+
+    - Extremely useful to show how each sponsor get be improved and do better by garnering more interest for them via these         methods. 
+    - If Hyatt wants to better and we want to help them we should be using email ads to rpomote them. If BECU want to do            better we should be promoting them alonside ticket discount advertisements, maybe saying "thanks to BECU we can offer         this discount" or something.
+```{r, eval=FALSE}
+
+
+write.csv(soccer_sponsorbest_ads,"C:\\Users\\jorda\\OneDrive\\Documents\\5210R\\Tenth Week\\soccer_sponsorbest_ads.csv", row.names = FALSE)
+
+
+write.csv(soccer_Sponsors,"C:\\Users\\jorda\\OneDrive\\Documents\\5210R\\Tenth Week\\soccer_Sponsors.csv", row.names = FALSE)
+```
